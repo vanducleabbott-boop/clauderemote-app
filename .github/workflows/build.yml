@@ -1,0 +1,28 @@
+name: Build IPA
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cài XcodeGen
+        run: brew install xcodegen
+      - name: Tạo dự án
+        run: xcodegen generate
+      - name: Build (không ký - ESign ký lại)
+        run: |
+          xcodebuild -project ClaudeRemote.xcodeproj -scheme ClaudeRemote -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+      - name: Đóng gói IPA
+        run: |
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/ClaudeRemote.app Payload/
+          zip -qry ClaudeRemote.ipa Payload
+          ls -la ClaudeRemote.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ClaudeRemote-ipa
+          path: ClaudeRemote.ipa
