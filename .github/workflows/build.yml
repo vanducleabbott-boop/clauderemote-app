@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-15-intel  # arm64 hay thieu may (10/2026)
     steps:
       - uses: actions/checkout@v4
       - name: Cài XcodeGen
