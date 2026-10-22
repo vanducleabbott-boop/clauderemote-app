@@ -40,7 +40,7 @@ public final class AppSettings: ObservableObject {
     }
 
     public init() {
-        self.baseURL = UserDefaults.standard.string(forKey: Keys.baseURL) ?? ""
+        self.baseURL = UserDefaults.standard.string(forKey: Keys.baseURL) ?? "https://desktop-krdjkc2.tailbd558a.ts.net:8443"
         self.token = Keychain.get(Keys.token) ?? ""
 
         if let savedDirs = UserDefaults.standard.stringArray(forKey: Keys.recentDirs), !savedDirs.isEmpty {

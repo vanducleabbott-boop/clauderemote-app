@@ -32,7 +32,7 @@
 //
 //  4. Cau hinh chung:
 //     - HTTP request timeout: 10 giay
-//     - baseURL chuan hoa: tu dong them "http://" neu thieu scheme, cat dau "/" o cuoi.
+//     - baseURL chuan hoa: tu dong them "https://" neu thieu scheme, cat dau "/" o cuoi.
 //
 
 import Foundation
@@ -188,14 +188,14 @@ public final class ServerAPI {
         self.urlSession = URLSession(configuration: config)
     }
 
-    /// Chuan hoa baseURL: cat khoang trang, them "http://" neu thieu scheme, bo dau "/" cuoi.
+    /// Chuan hoa baseURL: cat khoang trang, them "https://" neu thieu scheme, bo dau "/" cuoi.
     public static func normalizeBaseURL(_ raw: String) -> String {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         while s.hasSuffix("/") {
             s.removeLast()
         }
         if !s.isEmpty && !s.contains("://") {
-            s = "http://" + s
+            s = "https://" + s
         }
         while s.hasSuffix("/") {
             s.removeLast()
