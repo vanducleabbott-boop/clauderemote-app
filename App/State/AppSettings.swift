@@ -40,7 +40,15 @@ public final class AppSettings: ObservableObject {
     }
 
     public init() {
-        self.baseURL = UserDefaults.standard.string(forKey: Keys.baseURL) ?? "https://desktop-krdjkc2.tailbd558a.ts.net:8443"
+        let defaultURL = "https://desktop-krdjkc2.tailbd558a.ts.net:8444"
+        let oldDefaultURL = "https://desktop-krdjkc2.tailbd558a.ts.net:8443"
+        var savedURL = UserDefaults.standard.string(forKey: Keys.baseURL)
+        // Nguoi dung dang dung URL mac dinh cu (8443) thi tu chuyen sang 8444.
+        if let saved = savedURL, saved.trimmingCharacters(in: CharacterSet(charactersIn: "/ \n")) == oldDefaultURL {
+            savedURL = defaultURL
+            UserDefaults.standard.set(defaultURL, forKey: Keys.baseURL)
+        }
+        self.baseURL = savedURL ?? defaultURL
         self.token = Keychain.get(Keys.token) ?? ""
 
         if let savedDirs = UserDefaults.standard.stringArray(forKey: Keys.recentDirs), !savedDirs.isEmpty {

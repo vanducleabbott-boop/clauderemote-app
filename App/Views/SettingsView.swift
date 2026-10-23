@@ -18,7 +18,7 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section("URL máy chủ") {
-                    TextField("https://desktop-krdjkc2.tailbd558a.ts.net:8443", text: $settings.baseURL)
+                    TextField("https://desktop-krdjkc2.tailbd558a.ts.net:8444", text: $settings.baseURL)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)

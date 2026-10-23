@@ -60,7 +60,7 @@ Do Windows không hỗ trợ biên dịch trực tiếp mã nguồn Swift cho n�
 
 1. Mở ứng dụng `ClaudeRemote` trên iPhone.
 2. Nếu chưa thiết lập, ứng dụng sẽ tự động chuyển vào màn hình **Cài đặt**:
-   - **URL máy chủ**: Điền địa chỉ máy chủ PC (ví dụ kết nối qua mạng Tailscale: `https://desktop-krdjkc2.tailbd558a.ts.net:8443` (HTTPS qua tailscale serve) hoặc IP mạng nội bộ LAN).
+   - **URL máy chủ**: Điền địa chỉ máy chủ PC (ví dụ kết nối qua mạng Tailscale: `https://desktop-krdjkc2.tailbd558a.ts.net:8444` (HTTPS qua tailscale serve) hoặc IP mạng nội bộ LAN).
    - **Mã truy cập (Token)**: Nhập token xác thực đã thiết lập trên server PC.
 3. Bấm nút **Kiểm tra kết nối** để kiểm tra máy chủ có phản hồi HTTP 200 hay không.
 4. Nhấn **Lưu cài đặt** để bắt đầu sử dụng.
