@@ -26,6 +26,8 @@ struct TerminalHost: UIViewRepresentable {
         terminalView.nativeBackgroundColor = .black
         terminalView.nativeForegroundColor = UIColor(white: 0.9, alpha: 1)
         terminalView.terminalDelegate = coordinator
+        // Mac dinh SwiftTerm chi giu 500 dong -> khong cuon lai duoc dau phien
+        terminalView.changeScrollback(20000)
 
         let connection = TerminalConnection(url: url)
         coordinator.connection = connection

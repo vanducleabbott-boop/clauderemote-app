@@ -48,7 +48,7 @@ public final class TerminalConnection: NSObject, URLSessionWebSocketDelegate {
 
     /// Gom cac tin nho thanh 1 lan feed (~1 frame) thay vi nhay sang main thread cho tung tin
     private let flushInterval: TimeInterval = 0.012
-    /// Bo dem replay cua server (400K ky tu, nhieu ky tu khung 3 byte) co the > 1MB mac dinh
+    /// Bo dem replay cua server (2048K ky tu, nhieu ky tu khung 3 byte) vuot xa 1MB mac dinh
     private let maxMessageSize = 32 * 1024 * 1024
     private let pingInterval: TimeInterval = 20
 
