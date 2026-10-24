@@ -16,7 +16,11 @@ public final class TerminalConnection: NSObject, URLSessionWebSocketDelegate {
 
     public let url: URL
 
+    /// Du lieu terminal da gom lai, luon goi tren main thread.
     public var onData: ((Data) -> Void)?
+    /// Goi tren main thread ngay truoc du lieu dau tien cua moi lan ket noi
+    /// (server se phat lai toan bo bo dem -> can xoa terminal de khong in lap).
+    public var onReset: (() -> Void)?
     public var onState: ((State) -> Void)?
 
     public private(set) var state: State = .disconnected(reason: nil) {
@@ -37,9 +41,24 @@ public final class TerminalConnection: NSObject, URLSessionWebSocketDelegate {
     private var task: URLSessionWebSocketTask?
     private var isManuallyClosed: Bool = false
     private var retryWorkItem: DispatchWorkItem?
-    private var retryDelay: TimeInterval = 1.5
-    private let minRetryDelay: TimeInterval = 1.5
+    private var pingTimer: Timer?
+    private var retryDelay: TimeInterval = 1.0
+    private let minRetryDelay: TimeInterval = 1.0
     private let maxRetryDelay: TimeInterval = 5.0
+
+    /// Gom cac tin nho thanh 1 lan feed (~1 frame) thay vi nhay sang main thread cho tung tin
+    private let flushInterval: TimeInterval = 0.012
+    /// Bo dem replay cua server (400K ky tu, nhieu ky tu khung 3 byte) co the > 1MB mac dinh
+    private let maxMessageSize = 32 * 1024 * 1024
+    private let pingInterval: TimeInterval = 20
+
+    // Phan duoi day duoc truy cap tu queue cua URLSession -> bao ve bang lock
+    private let lock = NSLock()
+    private var generation: Int = 0
+    private var pending = Data()
+    private var pendingReset = false
+    private var receivedFirst = false
+    private var flushScheduled = false
 
     public init(url: URL) {
         self.url = url
@@ -47,7 +66,10 @@ public final class TerminalConnection: NSObject, URLSessionWebSocketDelegate {
     }
 
     deinit {
-        close()
+        pingTimer?.invalidate()
+        retryWorkItem?.cancel()
+        task?.cancel(with: .normalClosure, reason: nil)
+        session?.invalidateAndCancel()
     }
 
     // MARK: - Public Controls
@@ -60,23 +82,57 @@ public final class TerminalConnection: NSObject, URLSessionWebSocketDelegate {
         updateState(.connecting)
 
         let configuration = URLSessionConfiguration.default
+        configuration.waitsForConnectivity = false
         let newSession = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
         self.session = newSession
 
         let newTask = newSession.webSocketTask(with: url)
+        newTask.maximumMessageSize = maxMessageSize
         self.task = newTask
-        newTask.resume()
 
-        receiveLoop(for: newTask)
+        lock.lock()
+        let gen = generation
+        lock.unlock()
+
+        newTask.resume()
+        receiveLoop(for: newTask, generation: gen)
     }
 
-    /// Chu dong noi lai ngay lap tuc (vi du khi app tro lai foreground).
+    /// Chu dong noi lai ngay lap tuc.
     public func reconnectNow() {
         retryWorkItem?.cancel()
         retryWorkItem = nil
         retryDelay = minRetryDelay
         isManuallyClosed = false
         connect()
+    }
+
+    /// Khi app tro lai foreground: ket noi con song thi giu nguyen (khong tai lai bo dem),
+    /// chi noi lai khi da mat hoac ping khong tra loi trong 3s.
+    public func ensureAlive() {
+        guard !isManuallyClosed else { return }
+        guard state == .connected, let task = task else {
+            reconnectNow()
+            return
+        }
+
+        var answered = false
+        let timeout = DispatchWorkItem { [weak self, weak task] in
+            guard let self = self, !answered, let task = task, self.task === task else { return }
+            self.reconnectNow()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: timeout)
+
+        task.sendPing { [weak self, weak task] error in
+            DispatchQueue.main.async {
+                answered = true
+                timeout.cancel()
+                guard let self = self, let task = task, self.task === task else { return }
+                if error != nil {
+                    self.reconnectNow()
+                }
+            }
+        }
     }
 
     /// Dong ket noi thu cong va khong tu dong noi lai.
@@ -125,48 +181,117 @@ public final class TerminalConnection: NSObject, URLSessionWebSocketDelegate {
         }
     }
 
+    private func markConnected() {
+        retryDelay = minRetryDelay
+        updateState(.connected)
+        startPing()
+    }
+
     private func cleanUpCurrentConnection() {
+        stopPing()
+
+        lock.lock()
+        generation += 1
+        pending.removeAll(keepingCapacity: false)
+        pendingReset = false
+        receivedFirst = false
+        lock.unlock()
+
         task?.cancel(with: .normalClosure, reason: nil)
         task = nil
         session?.invalidateAndCancel()
         session = nil
     }
 
-    private func receiveLoop(for currentTask: URLSessionWebSocketTask) {
+    /// Nhan tin tren queue cua URLSession, chi gom vao bo dem; main thread feed theo nhip flushInterval.
+    private func receiveLoop(for currentTask: URLSessionWebSocketTask, generation gen: Int) {
         currentTask.receive { [weak self, weak currentTask] result in
-            DispatchQueue.main.async {
-                guard let self = self,
-                      let currentTask = currentTask,
-                      self.task === currentTask,
-                      !self.isManuallyClosed else {
-                    return
+            guard let self = self, let currentTask = currentTask else { return }
+
+            switch result {
+            case .success(let message):
+                let chunk: Data
+                switch message {
+                case .data(let data):
+                    chunk = data
+                case .string(let text):
+                    chunk = Data(text.utf8)
+                @unknown default:
+                    chunk = Data()
                 }
 
-                switch result {
-                case .success(let message):
-                    if self.state != .connected {
-                        self.retryDelay = self.minRetryDelay
-                        self.updateState(.connected)
+                self.lock.lock()
+                guard gen == self.generation else {
+                    self.lock.unlock()
+                    return
+                }
+                if !self.receivedFirst {
+                    self.receivedFirst = true
+                    self.pendingReset = true
+                }
+                self.pending.append(chunk)
+                let needSchedule = !self.flushScheduled
+                self.flushScheduled = true
+                self.lock.unlock()
+
+                if needSchedule {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + self.flushInterval) { [weak self] in
+                        self?.flush(generation: gen)
                     }
+                }
+                self.receiveLoop(for: currentTask, generation: gen)
 
-                    switch message {
-                    case .data(let data):
-                        self.onData?(data)
-                    case .string(let text):
-                        if let data = text.data(using: .utf8) {
-                            self.onData?(data)
-                        }
-                    @unknown default:
-                        break
-                    }
-
-                    self.receiveLoop(for: currentTask)
-
-                case .failure(let error):
+            case .failure(let error):
+                DispatchQueue.main.async {
+                    guard self.task === currentTask else { return }
                     self.handleFailure(reason: error.localizedDescription)
                 }
             }
         }
+    }
+
+    private func flush(generation gen: Int) {
+        lock.lock()
+        flushScheduled = false
+        guard gen == generation, !pending.isEmpty else {
+            lock.unlock()
+            return
+        }
+        let data = pending
+        let reset = pendingReset
+        pending = Data()
+        pendingReset = false
+        lock.unlock()
+
+        guard !isManuallyClosed else { return }
+        if state != .connected {
+            markConnected()
+        }
+        if reset {
+            onReset?()
+        }
+        onData?(data)
+    }
+
+    private func startPing() {
+        stopPing()
+        let timer = Timer(timeInterval: pingInterval, repeats: true) { [weak self] _ in
+            guard let self = self, let task = self.task, self.state == .connected else { return }
+            task.sendPing { [weak self, weak task] error in
+                guard let error = error else { return }
+                DispatchQueue.main.async {
+                    guard let self = self, let task = task, self.task === task else { return }
+                    self.handleFailure(reason: error.localizedDescription)
+                }
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        pingTimer = timer
+    }
+
+    private func stopPing() {
+        pingTimer?.invalidate()
+        pingTimer = nil
     }
 
     private func handleFailure(reason: String) {
@@ -212,8 +337,7 @@ public final class TerminalConnection: NSObject, URLSessionWebSocketDelegate {
     ) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self, self.task === webSocketTask, !self.isManuallyClosed else { return }
-            self.retryDelay = self.minRetryDelay
-            self.updateState(.connected)
+            self.markConnected()
         }
     }
 

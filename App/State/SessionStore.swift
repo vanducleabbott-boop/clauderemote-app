@@ -17,24 +17,29 @@ public final class SessionStore: ObservableObject {
     public init() {}
 
     /// Lam moi danh sach cac phien tu server. Khong xoa danh sach cu khi gap loi.
+    /// Chi gan @Published khi gia tri doi, de poll 3s khong ve lai giao dien vo ich.
     public func refresh(settings: AppSettings) async {
         guard settings.isConfigured else {
-            self.error = APIError.missingConfiguration.localizedDescription
+            setError(APIError.missingConfiguration.localizedDescription)
             return
         }
-
-        loading = true
-        error = nil
-        defer { loading = false }
 
         let api = settings.makeAPI()
         do {
             let fetched = try await api.listSessions()
-            self.sessions = fetched
-            self.error = nil
+            if fetched != sessions {
+                sessions = fetched
+            }
+            setError(nil)
         } catch {
             // Khong xoa danh sach cu khi loi, chi ghi nhan loi
-            self.error = error.localizedDescription
+            setError(error.localizedDescription)
+        }
+    }
+
+    private func setError(_ value: String?) {
+        if error != value {
+            error = value
         }
     }
 

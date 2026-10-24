@@ -32,7 +32,13 @@ struct TerminalHost: UIViewRepresentable {
         coordinator.terminalView = terminalView
 
         connection.onData = { [weak terminalView] data in
-            terminalView?.feed(byteArray: ArraySlice([UInt8](data)))
+            terminalView?.feed(byteArray: ArraySlice(data))
+        }
+
+        // Moi lan (noi lai) server phat lai ca bo dem: gui ESC c (RIS) xoa sach terminal truoc,
+        // neu khong noi dung cu bi in chong len nhau
+        connection.onReset = { [weak terminalView] in
+            terminalView?.feed(byteArray: [0x1B, 0x63])
         }
 
         let stateBinding = _state
@@ -91,7 +97,8 @@ struct TerminalHost: UIViewRepresentable {
         }
 
         @objc private func handleWillEnterForeground() {
-            connection?.reconnectNow()
+            // Khong ngat ket noi con song (tranh tai lai 400KB moi lan mo app), chi noi lai neu da chet
+            connection?.ensureAlive()
         }
 
         // MARK: - TerminalViewDelegate

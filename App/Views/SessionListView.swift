@@ -11,6 +11,7 @@ struct SessionListView: View {
 
     @State private var showNewSession: Bool = false
     @State private var showSettings: Bool = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         List {
@@ -90,7 +91,10 @@ struct SessionListView: View {
         .refreshable {
             await store.refresh(settings: settings)
         }
-        .task {
+        // Chi poll khi man hinh danh sach dang hien va app o foreground
+        // (.task tu huy khi mo terminal de khong lam terminal bi ve lai moi 3s)
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
             while !Task.isCancelled {
                 await store.refresh(settings: settings)
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
