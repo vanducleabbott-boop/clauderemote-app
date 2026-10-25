@@ -15,7 +15,9 @@ import UIKit
 import SwiftTerm
 
 final class RemoteTerminalView: TerminalView {
-    private var wheelPan: UIPanGestureRecognizer!
+    /// Optional: SwiftTerm goi mouseModeChanged ngay trong super.init (Terminal.setup dat mouseMode = .off),
+    /// luc do pan chua duoc tao -> khong duoc force unwrap (ban 1.8 crash khi mo phien vi cho nay)
+    private var wheelPan: UIPanGestureRecognizer?
     private let wheelDelegate = SimultaneousGestureDelegate()
     private var accumulated: CGFloat = 0
     private var momentumTimer: Timer?
@@ -34,14 +36,14 @@ final class RemoteTerminalView: TerminalView {
         let pan = UIPanGestureRecognizer(target: self, action: #selector(handleWheelPan(_:)))
         pan.maximumNumberOfTouches = 1
         pan.delegate = wheelDelegate
-        pan.isEnabled = false
+        pan.isEnabled = getTerminal().mouseMode != .off
         addGestureRecognizer(pan)
         wheelPan = pan
     }
 
     /// Khong goi super: super bat pan "keo chuot" cua SwiftTerm. Cham (tap) van gui su kien chuot binh thuong.
     override func mouseModeChanged(source: Terminal) {
-        wheelPan.isEnabled = source.mouseMode != .off
+        wheelPan?.isEnabled = source.mouseMode != .off
         if source.mouseMode == .off {
             stopMomentum()
         }
@@ -95,6 +97,11 @@ final class RemoteTerminalView: TerminalView {
             momentumTimer = timer
         }
         tick()
+    }
+
+    /// Cho test: pan con lan dang bat hay khong
+    var isWheelScrollEnabled: Bool {
+        wheelPan?.isEnabled ?? false
     }
 
     private func stopMomentum() {
