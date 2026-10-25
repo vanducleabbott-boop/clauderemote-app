@@ -3,13 +3,15 @@
 //  ClaudeRemote
 //
 //  Thanh phim phu (inputAccessoryView) tren ban phim iOS de gui cac phim dieu khien terminal.
+//  2 hang co dinh vua man hinh, KHONG cuon ngang (ban 2.0 cuon ngang: cham vao nut la nut giu
+//  thao tac nen rat kho vuot, mui ten con gui nham phim khi vua dat tay).
 //
 //  Cham / giu:
 //  - Ctrl, Alt: cham = ap dung cho 1 phim tiep theo (ca phim go tren ban phim); giu = khoa
 //  - Esc: giu = Esc Esc (quay lai / sua tin truoc trong Claude)
 //  - ⏎: giu = xuong dong khong gui (Alt+Enter)
-//  - Mui ten, PgUp/PgDn: giu = lap lai lien tuc
-//  - "Phím tắt": menu cac to hop cua Claude / agy
+//  - Mui ten: giu = lap lai lien tuc
+//  - "Phím tắt": menu cac to hop cua Claude / agy (ca PgUp/PgDn/Home/End)
 //
 
 import UIKit
@@ -29,8 +31,11 @@ final class KeyBar: UIView {
     private static let onceColor = UIColor.systemBlue
     private static let lockedColor = UIColor.systemOrange
 
+    private static let rowHeight: CGFloat = 38
+    private static let barHeight: CGFloat = rowHeight * 2 + 5 + 5 * 2
+
     override var intrinsicContentSize: CGSize {
-        return CGSize(width: UIView.noIntrinsicMetric, height: 44)
+        return CGSize(width: UIView.noIntrinsicMetric, height: Self.barHeight)
     }
 
     init(terminalView: TerminalView, connection: TerminalConnection, modifiers: KeyModifiers, tool: String) {
@@ -38,7 +43,7 @@ final class KeyBar: UIView {
         self.connection = connection
         self.modifiers = modifiers
         self.tool = tool
-        super.init(frame: CGRect(x: 0, y: 0, width: 0, height: 44))
+        super.init(frame: CGRect(x: 0, y: 0, width: 0, height: Self.barHeight))
         self.autoresizingMask = .flexibleWidth
         self.backgroundColor = UIColor(white: 0.12, alpha: 1)
         setupViews()
@@ -58,34 +63,6 @@ final class KeyBar: UIView {
     // MARK: - Layout
 
     private func setupViews() {
-        let scrollView = UIScrollView()
-        scrollView.showsHorizontalScrollIndicator = false
-        scrollView.showsVerticalScrollIndicator = false
-        scrollView.delaysContentTouches = false
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(scrollView)
-
-        let stackView = UIStackView()
-        stackView.axis = .horizontal
-        stackView.spacing = 6
-        stackView.alignment = .fill
-        stackView.distribution = .fill
-        stackView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.addSubview(stackView)
-
-        NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: topAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
-
-            stackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 6),
-            stackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -6),
-            stackView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor, constant: 6),
-            stackView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor, constant: -6),
-            stackView.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor, constant: -12)
-        ])
-
         // Ctrl / Alt: cham = 1 lan, giu = khoa
         let ctrl = makeButton("Ctrl", tap: { [weak self] in self?.modifiers.tapCtrl() },
                               hold: { [weak self] in self?.modifiers.lockCtrl() })
@@ -94,7 +71,7 @@ final class KeyBar: UIView {
         ctrlButton = ctrl
         altButton = alt
 
-        let buttons: [UIButton] = [
+        let row1: [UIButton] = [
             ctrl,
             alt,
             makeButton("Esc", tap: { [weak self] in self?.send([0x1B]) },
@@ -102,32 +79,52 @@ final class KeyBar: UIView {
             makeButton("^C", tap: { [weak self] in self?.send([0x03]) }),
             makeButton("Tab", tap: { [weak self] in self?.send([0x09]) }),
             makeButton("⇧Tab", tap: { [weak self] in self?.send([0x1B, 0x5B, 0x5A]) }),
+            makeShortcutsButton()
+        ]
+        let row2: [UIButton] = [
+            makeRepeatButton("←") { [weak self] in self?.sendSpecial(.left) },
             makeRepeatButton("↑") { [weak self] in self?.sendSpecial(.up) },
             makeRepeatButton("↓") { [weak self] in self?.sendSpecial(.down) },
-            makeRepeatButton("←") { [weak self] in self?.sendSpecial(.left) },
             makeRepeatButton("→") { [weak self] in self?.sendSpecial(.right) },
             makeButton("⏎", tap: { [weak self] in self?.sendEnter() },
                        hold: { [weak self] in self?.send([0x1B, 0x0D]) }),
-            makeShortcutsButton(),
             makeButton("/", tap: { [weak self] in self?.sendTyped("/") }),
             makeButton("@", tap: { [weak self] in self?.sendTyped("@") }),
-            makeButton("!", tap: { [weak self] in self?.sendTyped("!") }),
-            makeRepeatButton("PgUp") { [weak self] in self?.sendSpecial(.pageUp) },
-            makeRepeatButton("PgDn") { [weak self] in self?.sendSpecial(.pageDown) },
-            makeButton("Home", tap: { [weak self] in self?.sendSpecial(.home) }),
-            makeButton("End", tap: { [weak self] in self?.sendSpecial(.end) })
+            makeButton("!", tap: { [weak self] in self?.sendTyped("!") })
         ]
-        buttons.forEach { stackView.addArrangedSubview($0) }
+
+        func row(_ buttons: [UIButton]) -> UIStackView {
+            let stack = UIStackView(arrangedSubviews: buttons)
+            stack.axis = .horizontal
+            stack.spacing = 5
+            stack.distribution = .fillEqually
+            return stack
+        }
+
+        let rows = UIStackView(arrangedSubviews: [row(row1), row(row2)])
+        rows.axis = .vertical
+        rows.spacing = 5
+        rows.distribution = .fillEqually
+        rows.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(rows)
+
+        NSLayoutConstraint.activate([
+            rows.topAnchor.constraint(equalTo: topAnchor, constant: 5),
+            rows.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5),
+            rows.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 5),
+            rows.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -5)
+        ])
         refreshModifierButtons()
     }
 
     private func styledButton(_ title: String) -> UIButton {
         var config = UIButton.Configuration.plain()
         config.title = title
-        config.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8)
+        config.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 2, bottom: 0, trailing: 2)
+        config.titleLineBreakMode = .byClipping
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
             var a = attrs
-            a.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+            a.font = UIFont.systemFont(ofSize: 15, weight: .medium)
             return a
         }
         config.baseForegroundColor = .white
@@ -136,7 +133,6 @@ final class KeyBar: UIView {
         button.layer.cornerRadius = 6
         button.clipsToBounds = true
         button.translatesAutoresizingMaskIntoConstraints = false
-        button.widthAnchor.constraint(greaterThanOrEqualToConstant: 40).isActive = true
         return button
     }
 
@@ -159,7 +155,7 @@ final class KeyBar: UIView {
         return button
     }
 
-    /// Nut giu de lap lai (mui ten, PgUp/PgDn): gui ngay khi cham, giu 0.4s thi lap moi 0.07s
+    /// Nut giu de lap lai (mui ten): gui ngay khi cham, giu 0.4s thi lap moi 0.07s
     private func makeRepeatButton(_ title: String, action: @escaping () -> Void) -> UIButton {
         let button = styledButton(title)
         button.addAction(UIAction { [weak self] _ in
@@ -185,7 +181,8 @@ final class KeyBar: UIView {
     // MARK: - Menu phim tat Claude / agy
 
     private func makeShortcutsButton() -> UIButton {
-        let button = styledButton("Phím tắt")
+        let button = styledButton("⋯")
+        button.accessibilityLabel = "Phím tắt"
         button.backgroundColor = UIColor(white: 0.3, alpha: 1)
         button.menu = buildShortcutsMenu()
         button.showsMenuAsPrimaryAction = true
@@ -229,8 +226,12 @@ final class KeyBar: UIView {
         }
 
         let scroll = UIMenu(title: "Cuộn", options: .displayInline, children: [
+            item("Lên một trang", "PgUp", [0x1B, 0x5B, 0x35, 0x7E]),
+            item("Xuống một trang", "PgDn", [0x1B, 0x5B, 0x36, 0x7E]),
             item("Lên đầu cuộc trò chuyện", "Ctrl+Home", [0x1B, 0x5B, 0x31, 0x3B, 0x35, 0x48]),
-            item("Xuống cuối", "Ctrl+End", [0x1B, 0x5B, 0x31, 0x3B, 0x35, 0x46])
+            item("Xuống cuối", "Ctrl+End", [0x1B, 0x5B, 0x31, 0x3B, 0x35, 0x46]),
+            item("Đầu dòng", "Home", [0x1B, 0x5B, 0x48]),
+            item("Cuối dòng", "End", [0x1B, 0x5B, 0x46])
         ])
 
         let danger = UIMenu(title: "", options: .displayInline, children: [
@@ -252,8 +253,9 @@ final class KeyBar: UIView {
         }
         ctrlButton?.backgroundColor = color(modifiers.ctrl)
         altButton?.backgroundColor = color(modifiers.alt)
-        ctrlButton?.configuration?.title = modifiers.ctrl == .locked ? "Ctrl 🔒" : "Ctrl"
-        altButton?.configuration?.title = modifiers.alt == .locked ? "Alt 🔒" : "Alt"
+        // Khoa = mau cam (nut hep, khong chen bieu tuong)
+        ctrlButton?.accessibilityValue = modifiers.ctrl == .locked ? "đã khoá" : nil
+        altButton?.accessibilityValue = modifiers.alt == .locked ? "đã khoá" : nil
     }
 
     private func send(_ bytes: [UInt8]) {
