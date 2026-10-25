@@ -47,6 +47,25 @@ final class RemoteTerminalView: TerminalView {
         if source.mouseMode == .off {
             stopMomentum()
         }
+        updateNativeScroll(source)
+    }
+
+    override func bufferActivated(source: Terminal) {
+        super.bufferActivated(source: source)
+        updateNativeScroll(source)
+    }
+
+    /// Claude fullscreen (alt screen / bat chuot): tat cuon san co cua UIScrollView. Neu khong, vuot vua gui
+    /// con lan cho Claude vua dich khung hinh -> logo Claude hien 2 lan, o nhap luc mat luc hien (ban 2.1).
+    /// Dung `source`, khong goi getTerminal(): ham nay co the chay ngay trong super.init.
+    private func updateNativeScroll(_ source: Terminal) {
+        let appScrolls = source.isCurrentBufferAlternate || source.mouseMode != .off
+        isScrollEnabled = !appScrolls
+    }
+
+    /// Cho test: cuon san co cua terminal dang bat hay khong
+    var isNativeScrollEnabled: Bool {
+        isScrollEnabled
     }
 
     private var stepHeight: CGFloat {

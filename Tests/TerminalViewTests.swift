@@ -35,3 +35,17 @@ final class TerminalViewTests: XCTestCase {
         XCTAssertEqual(terminal.encodeButton(button: 5, release: false, shift: false, meta: false, control: false), 65)
     }
 }
+
+final class NativeScrollTests: XCTestCase {
+    /// Claude fullscreen (alt screen) -> tat cuon san co (tranh logo hien 2 lan); thoat -> bat lai
+    func testNativeScrollOffInAltScreen() {
+        let view = RemoteTerminalView(frame: CGRect(x: 0, y: 0, width: 390, height: 700))
+        XCTAssertTrue(view.isNativeScrollEnabled)
+        view.feed(text: "\u{1B}[?1049h")
+        XCTAssertFalse(view.isNativeScrollEnabled)
+        view.feed(text: "\u{1B}[?1000h\u{1B}[?1006h")
+        XCTAssertFalse(view.isNativeScrollEnabled)
+        view.feed(text: "\u{1B}[?1000l\u{1B}[?1006l\u{1B}[?1049l")
+        XCTAssertTrue(view.isNativeScrollEnabled)
+    }
+}

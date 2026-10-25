@@ -78,8 +78,9 @@ final class KeyBar: UIView {
                        hold: { [weak self] in self?.send([0x1B, 0x1B]) }),
             makeButton("^C", tap: { [weak self] in self?.send([0x03]) }),
             makeButton("Tab", tap: { [weak self] in self?.send([0x09]) }),
-            makeButton("⇧Tab", tap: { [weak self] in self?.send([0x1B, 0x5B, 0x5A]) }),
-            makeShortcutsButton()
+            makeButton("⇧Tab", fontSize: 12, tap: { [weak self] in self?.send([0x1B, 0x5B, 0x5A]) }),
+            makeShortcutsButton(),
+            makeHideKeyboardButton()
         ]
         let row2: [UIButton] = [
             makeRepeatButton("←") { [weak self] in self?.sendSpecial(.left) },
@@ -117,14 +118,14 @@ final class KeyBar: UIView {
         refreshModifierButtons()
     }
 
-    private func styledButton(_ title: String) -> UIButton {
+    private func styledButton(_ title: String, fontSize: CGFloat = 15) -> UIButton {
         var config = UIButton.Configuration.plain()
         config.title = title
         config.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 2, bottom: 0, trailing: 2)
         config.titleLineBreakMode = .byClipping
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
             var a = attrs
-            a.font = UIFont.systemFont(ofSize: 15, weight: .medium)
+            a.font = UIFont.systemFont(ofSize: fontSize, weight: .medium)
             return a
         }
         config.baseForegroundColor = .white
@@ -137,8 +138,8 @@ final class KeyBar: UIView {
     }
 
     /// Nut cham + (tuy chon) giu 0.4s cho thao tac khac
-    private func makeButton(_ title: String, tap: @escaping () -> Void, hold: (() -> Void)? = nil) -> UIButton {
-        let button = styledButton(title)
+    private func makeButton(_ title: String, fontSize: CGFloat = 15, tap: @escaping () -> Void, hold: (() -> Void)? = nil) -> UIButton {
+        let button = styledButton(title, fontSize: fontSize)
         button.addAction(UIAction { _ in
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             tap()
@@ -175,6 +176,20 @@ final class KeyBar: UIView {
             self?.repeatTimer = nil
         }
         button.addAction(stop, for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit])
+        return button
+    }
+
+    /// An ban phim (va thanh phim); man hinh phien hien nut noi de mo lai
+    private func makeHideKeyboardButton() -> UIButton {
+        let button = styledButton("")
+        button.configuration?.title = nil
+        button.configuration?.image = UIImage(systemName: "keyboard.chevron.compact.down")
+        button.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 15, weight: .medium)
+        button.accessibilityLabel = "Ẩn bàn phím"
+        button.addAction(UIAction { [weak self] _ in
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            _ = self?.terminalView?.resignFirstResponder()
+        }, for: .touchUpInside)
         return button
     }
 

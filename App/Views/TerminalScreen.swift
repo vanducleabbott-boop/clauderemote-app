@@ -19,6 +19,8 @@ struct TerminalScreen: View {
         case files
     }
     @State private var tab: Tab = .terminal
+    /// Ban phim dang hien? An thi hien nut noi de mo lai (o che do fullscreen cham terminal khong mo ban phim)
+    @State private var keyboardVisible = false
 
     var body: some View {
         Group {
@@ -35,6 +37,28 @@ struct TerminalScreen: View {
                         .opacity(tab == .terminal ? 1 : 0)
                         .allowsHitTesting(tab == .terminal)
                     // KHONG ignoresSafeArea(.keyboard) de ban phim day terminal len
+
+                    if tab == .terminal && !readOnly && !keyboardVisible {
+                        VStack {
+                            Spacer()
+                            HStack {
+                                Spacer()
+                                Button {
+                                    NotificationCenter.default.post(name: TerminalHost.focusTerminal, object: nil)
+                                } label: {
+                                    Image(systemName: "keyboard")
+                                        .font(.system(size: 18, weight: .medium))
+                                        .foregroundColor(.white)
+                                        .frame(width: 52, height: 52)
+                                        .background(Circle().fill(Color(white: 0.25).opacity(0.92)))
+                                        .shadow(radius: 3)
+                                }
+                                .accessibilityLabel("Hiện bàn phím")
+                                .padding(.trailing, 16)
+                                .padding(.bottom, 16)
+                            }
+                        }
+                    }
 
                     if tab == .files {
                         SessionFilesView(session: session) {
@@ -58,6 +82,12 @@ struct TerminalScreen: View {
                         .padding(.vertical, 6)
                         .background(Color.black)
                     }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                    keyboardVisible = true
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                    keyboardVisible = false
                 }
                 .onChange(of: tab) { newTab in
                     if newTab == .files {
