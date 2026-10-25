@@ -2,8 +2,8 @@
 //  SendFilesView.swift
 //  ClaudeRemote
 //
-//  Gui file cho Claude/agy: chon anh/file + nhap yeu cau -> tao luot moi, upload tung file,
-//  server go yeu cau (kem duong dan Gui len / Ket qua) vao phien.
+//  Gui file cho Claude/agy: chon anh/file -> tao luot moi, upload tung file, server DIEN SAN
+//  duong dan file vao o nhap cua phien (khong Enter). Nguoi dung go yeu cau o tab Terminal roi tu gui.
 //
 
 import SwiftUI
@@ -24,7 +24,6 @@ struct SendFilesView: View {
         let size: Int64
     }
 
-    @State private var message = ""
     @State private var files: [PickedFile] = []
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var showImporter = false
@@ -38,15 +37,6 @@ struct SendFilesView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    TextField("Ví dụ: tóm tắt file này, dịch sang tiếng Anh…", text: $message, axis: .vertical)
-                        .lineLimit(2...6)
-                } header: {
-                    Text("Yêu cầu cho \(toolName)")
-                } footer: {
-                    Text("Để trống thì \(toolName) sẽ được nhờ đọc và xử lý file. Kết quả lưu vào thư mục Kết quả của lượt này.")
-                }
-
                 Section {
                     PhotosPicker(selection: $photoItems, maxSelectionCount: 20, matching: .images) {
                         Label("Chọn ảnh", systemImage: "photo.on.rectangle")
@@ -62,6 +52,8 @@ struct SendFilesView: View {
                             Text("Đang chuẩn bị…").foregroundColor(.secondary)
                         }
                     }
+                } footer: {
+                    Text("Gửi xong, đường dẫn file được điền sẵn vào ô nhập của \(toolName) (chưa gửi). Bạn gõ thêm yêu cầu ở tab Terminal rồi bấm Enter thì \(toolName) mới đọc file. Kết quả lưu vào thư mục Kết quả của lượt này.")
                 }
 
                 if !files.isEmpty {
@@ -210,7 +202,6 @@ struct SendFilesView: View {
         error = nil
         let api = settings.makeAPI()
         let toSend = files
-        let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
 
         Task {
             do {
@@ -220,16 +211,15 @@ struct SendFilesView: View {
                     progress = "Lượt \(turn.turn): đang tải \(i + 1)/\(toSend.count) – \(f.name)"
                     try await api.uploadFile(sessionId: session.id, turn: turn.turn, fileURL: f.url, name: f.name)
                 }
-                progress = "Đang giao việc cho \(toolName)…"
-                let result = try await api.submitTurn(sessionId: session.id, turn: turn.turn, message: text)
+                progress = "Đang điền đường dẫn file vào ô nhập…"
+                let result = try await api.submitTurn(sessionId: session.id, turn: turn.turn, message: "")
                 for f in toSend {
                     try? FileManager.default.removeItem(at: f.url.deletingLastPathComponent())
                 }
                 progress = nil
                 sending = false
                 if !result.sent {
-                    error = "Đã lưu file vào Lượt \(turn.turn) nhưng phiên đã thoát nên chưa giao việc cho \(toolName)."
-                    onSent()
+                    error = "Đã lưu file vào Lượt \(turn.turn) nhưng phiên đã thoát nên không điền được vào ô nhập của \(toolName)."
                     return
                 }
                 onSent()

@@ -11,6 +11,8 @@ import QuickLook
 
 struct SessionFilesView: View {
     let session: Session
+    /// Gui file xong (da dien vao o nhap): man hinh phien chuyen sang tab Terminal de go yeu cau
+    var onSent: () -> Void = {}
     @EnvironmentObject private var settings: AppSettings
 
     @State private var listing: FilesListing?
@@ -51,7 +53,7 @@ struct SessionFilesView: View {
 
                     groupHeader("Kết quả", systemImage: "arrow.down.circle.fill", color: .green)
                     if turn.results.isEmpty {
-                        placeholder("Đang chờ \(session.tool == "agy" ? "agy" : "Claude") xử lý…")
+                        placeholder("Chưa có kết quả")
                     }
                     ForEach(turn.results) { file in
                         fileRow(file, turn: turn.turn, kind: .results)
@@ -101,6 +103,7 @@ struct SessionFilesView: View {
         .sheet(isPresented: $showSend) {
             SendFilesView(session: session) {
                 Task { await load() }
+                onSent()
             }
         }
         .quickLookPreview($previewURL)

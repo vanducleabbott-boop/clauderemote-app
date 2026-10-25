@@ -10,11 +10,13 @@ import UIKit
 import SwiftTerm
 
 struct TerminalHost: UIViewRepresentable {
+    /// Gui de mo ban phim terminal (vd: sau khi gui file, de go yeu cau)
+    static let focusTerminal = Notification.Name("ClaudeRemote.focusTerminal")
     let session: Session
     /// nil = chi xem lich su da luu tren may (phien khong con tren server)
     let url: URL?
     @Binding var state: TerminalConnection.State
-    var accessoryProvider: ((TerminalView, TerminalConnection) -> UIView?)? = nil
+    var accessoryProvider: ((TerminalView, TerminalConnection, KeyModifiers) -> UIView?)? = nil
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -86,7 +88,7 @@ struct TerminalHost: UIViewRepresentable {
         }
 
         if let accessoryProvider = accessoryProvider {
-            terminalView.inputAccessoryView = accessoryProvider(terminalView, connection)
+            terminalView.inputAccessoryView = accessoryProvider(terminalView, connection, coordinator.modifiers)
         }
 
         // Hien lich su da luu truoc, xong moi ket noi (tranh xen ke du lieu cu/moi)
@@ -134,6 +136,8 @@ struct TerminalHost: UIViewRepresentable {
         weak var terminalView: TerminalView?
         /// true sau khi server gui hello (biet vi tri) -> output duoc luu vao may
         var storing = false
+        /// Ctrl/Alt dinh tu thanh phim, ap dung ca cho ky tu go tren ban phim iOS
+        let modifiers = KeyModifiers()
 
         override init() {
             super.init()
@@ -143,6 +147,16 @@ struct TerminalHost: UIViewRepresentable {
                 name: UIApplication.willEnterForegroundNotification,
                 object: nil
             )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleFocusTerminal),
+                name: TerminalHost.focusTerminal,
+                object: nil
+            )
+        }
+
+        @objc private func handleFocusTerminal() {
+            _ = terminalView?.becomeFirstResponder()
         }
 
         deinit {
@@ -167,7 +181,7 @@ struct TerminalHost: UIViewRepresentable {
         func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
 
         func send(source: TerminalView, data: ArraySlice<UInt8>) {
-            connection?.send(bytes: Data(data))
+            connection?.send(bytes: modifiers.apply(toTyped: Data(data)))
         }
 
         func scrolled(source: TerminalView, position: Double) {}

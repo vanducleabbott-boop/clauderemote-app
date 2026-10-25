@@ -31,13 +31,19 @@ struct TerminalScreen: View {
                     TerminalHost(session: session,
                                  url: readOnly ? nil : settings.makeAPI().webSocketURL(sessionId: session.id),
                                  state: $state,
-                                 accessoryProvider: { tv, conn in KeyBar(terminalView: tv, connection: conn) })
+                                 accessoryProvider: { tv, conn, mods in KeyBar(terminalView: tv, connection: conn, modifiers: mods, tool: session.tool) })
                         .opacity(tab == .terminal ? 1 : 0)
                         .allowsHitTesting(tab == .terminal)
                     // KHONG ignoresSafeArea(.keyboard) de ban phim day terminal len
 
                     if tab == .files {
-                        SessionFilesView(session: session)
+                        SessionFilesView(session: session) {
+                            tab = .terminal
+                            // Doi sheet dong xong roi moi mo ban phim terminal
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                NotificationCenter.default.post(name: TerminalHost.focusTerminal, object: nil)
+                            }
+                        }
                             .background(Color(.systemGroupedBackground))
                     }
                 }
