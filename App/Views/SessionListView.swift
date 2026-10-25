@@ -88,6 +88,14 @@ struct SessionListView: View {
                     }
                 }
             }
+
+            Section {
+                Text("Claude Remote \(AppSettings.versionText)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .listRowBackground(Color.clear)
+            }
         }
         .onAppear { localVersion += 1 }
         .navigationTitle("Phiên terminal")

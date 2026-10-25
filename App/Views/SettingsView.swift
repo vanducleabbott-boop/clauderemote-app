@@ -54,6 +54,10 @@ struct SettingsView: View {
                         }
                     }
                 }
+
+                Section("Thông tin") {
+                    LabeledContent("Phiên bản", value: AppSettings.versionText)
+                }
             }
             .navigationTitle("Cài đặt")
             .navigationBarTitleDisplayMode(.inline)

@@ -58,6 +58,14 @@ public final class AppSettings: ObservableObject {
         }
     }
 
+    /// "1.7 (build 8)" lay tu Info.plist (MARKETING_VERSION / CURRENT_PROJECT_VERSION trong project.yml)
+    public static var versionText: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(version) (build \(build))"
+    }
+
     /// Kiem tra cau hinh da du baseURL va token chua.
     public var isConfigured: Bool {
         let trimmedURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
