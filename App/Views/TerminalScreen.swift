@@ -14,6 +14,12 @@ struct TerminalScreen: View {
     @EnvironmentObject var settings: AppSettings
     @State var state = TerminalConnection.State.connecting
 
+    enum Tab: Hashable {
+        case terminal
+        case files
+    }
+    @State private var tab: Tab = .terminal
+
     var body: some View {
         Group {
             if readOnly || settings.makeAPI().webSocketURL(sessionId: session.id) != nil {
@@ -21,11 +27,37 @@ struct TerminalScreen: View {
                     Color.black
                         .ignoresSafeArea()
 
+                    // Terminal luon giu trong cay view (an khi o tab File) de khong mat ket noi
                     TerminalHost(session: session,
                                  url: readOnly ? nil : settings.makeAPI().webSocketURL(sessionId: session.id),
                                  state: $state,
                                  accessoryProvider: { tv, conn in KeyBar(terminalView: tv, connection: conn) })
+                        .opacity(tab == .terminal ? 1 : 0)
+                        .allowsHitTesting(tab == .terminal)
                     // KHONG ignoresSafeArea(.keyboard) de ban phim day terminal len
+
+                    if tab == .files {
+                        SessionFilesView(session: session)
+                            .background(Color(.systemGroupedBackground))
+                    }
+                }
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if !readOnly {
+                        Picker("", selection: $tab) {
+                            Text("Terminal").tag(Tab.terminal)
+                            Text("File").tag(Tab.files)
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.black)
+                    }
+                }
+                .onChange(of: tab) { newTab in
+                    if newTab == .files {
+                        // Cat ban phim terminal khi sang tab File
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
                 }
             } else {
                 ZStack {

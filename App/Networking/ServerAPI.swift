@@ -278,7 +278,7 @@ public final class ServerAPI {
 
     // MARK: - Private Helpers
 
-    private func makeRequest(path: String, method: String, body: Data? = nil) throws -> URLRequest {
+    func makeRequest(path: String, method: String, body: Data? = nil) throws -> URLRequest {
         guard !baseURL.isEmpty, !token.isEmpty else {
             throw APIError.missingConfiguration
         }
@@ -300,11 +300,11 @@ public final class ServerAPI {
         return request
     }
 
-    private func perform(request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    func perform(request: URLRequest, session: URLSession? = nil) async throws -> (Data, HTTPURLResponse) {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await urlSession.data(for: request)
+            (data, response) = try await (session ?? urlSession).data(for: request)
         } catch {
             throw APIError.networkError(error.localizedDescription)
         }
