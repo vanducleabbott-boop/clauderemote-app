@@ -14,25 +14,7 @@ final class TerminalViewTests: XCTestCase {
         view.changeScrollback(20000)
         view.feed(byteArray: [0x1B, 0x63]) // RIS khi noi lai server cu
         view.feed(text: "xin chao\r\n")
-        XCTAssertFalse(view.isWheelScrollEnabled)
-    }
-
-    /// Claude fullscreen bat alt screen + chuot SGR -> bat vuot con lan; tat chuot -> tat
-    func testWheelFollowsMouseMode() {
-        let view = RemoteTerminalView(frame: CGRect(x: 0, y: 0, width: 390, height: 700))
-        view.feed(text: "\u{1B}[?1049h\u{1B}[?1000h\u{1B}[?1002h\u{1B}[?1006h")
-        XCTAssertTrue(view.isWheelScrollEnabled)
-        view.feed(text: "\u{1B}[?1006l\u{1B}[?1002l\u{1B}[?1000l\u{1B}[?1049l")
-        XCTAssertFalse(view.isWheelScrollEnabled)
-    }
-
-    /// Ma con lan SGR dung chuan: len = 64, xuong = 65
-    func testWheelEncoding() {
-        let view = RemoteTerminalView(frame: CGRect(x: 0, y: 0, width: 390, height: 700))
-        view.feed(text: "\u{1B}[?1000h\u{1B}[?1006h")
-        let terminal = view.getTerminal()
-        XCTAssertEqual(terminal.encodeButton(button: 4, release: false, shift: false, meta: false, control: false), 64)
-        XCTAssertEqual(terminal.encodeButton(button: 5, release: false, shift: false, meta: false, control: false), 65)
+        XCTAssertTrue(view.isNativeScrollEnabled)
     }
 }
 
@@ -48,4 +30,32 @@ final class NativeScrollTests: XCTestCase {
         view.feed(text: "\u{1B}[?1000l\u{1B}[?1006l\u{1B}[?1049l")
         XCTAssertTrue(view.isNativeScrollEnabled)
     }
+
+    /// Giao dien co dien co bat chuot (man hinh chinh): van cuon tai cho, khong gui gi sang PC
+    func testMouseModeOnMainBufferStillScrollsLocally() {
+        let view = RemoteTerminalView(frame: CGRect(x: 0, y: 0, width: 390, height: 700))
+        var sent: [UInt8] = []
+        let spy = SendSpy { sent += $0 }
+        view.terminalDelegate = spy
+        view.feed(text: "\u{1B}[?1000h\u{1B}[?1006h")
+        for i in 0..<200 { view.feed(text: "dong \(i)\r\n") }
+        XCTAssertTrue(view.isNativeScrollEnabled)
+        XCTAssertTrue(sent.isEmpty)
+        withExtendedLifetime(spy) {}
+    }
+}
+
+private final class SendSpy: NSObject, TerminalViewDelegate {
+    let onSend: ([UInt8]) -> Void
+    init(_ onSend: @escaping ([UInt8]) -> Void) { self.onSend = onSend }
+    func send(source: TerminalView, data: ArraySlice<UInt8>) { onSend(Array(data)) }
+    func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {}
+    func setTerminalTitle(source: TerminalView, title: String) {}
+    func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
+    func scrolled(source: TerminalView, position: Double) {}
+    func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {}
+    func bell(source: TerminalView) {}
+    func clipboardCopy(source: TerminalView, content: Data) {}
+    func iTermContent(source: TerminalView, content: ArraySlice<UInt8>) {}
+    func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
 }
