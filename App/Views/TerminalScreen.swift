@@ -9,17 +9,22 @@ import SwiftUI
 
 struct TerminalScreen: View {
     let session: Session
+    /// Phien khong con tren server: chi xem lich su luu tren may
+    var readOnly: Bool = false
     @EnvironmentObject var settings: AppSettings
     @State var state = TerminalConnection.State.connecting
 
     var body: some View {
         Group {
-            if let url = settings.makeAPI().webSocketURL(sessionId: session.id) {
+            if readOnly || settings.makeAPI().webSocketURL(sessionId: session.id) != nil {
                 ZStack {
                     Color.black
                         .ignoresSafeArea()
 
-                    TerminalHost(url: url, state: $state, accessoryProvider: { tv, conn in KeyBar(terminalView: tv, connection: conn) })
+                    TerminalHost(session: session,
+                                 url: readOnly ? nil : settings.makeAPI().webSocketURL(sessionId: session.id),
+                                 state: $state,
+                                 accessoryProvider: { tv, conn in KeyBar(terminalView: tv, connection: conn) })
                     // KHONG ignoresSafeArea(.keyboard) de ban phim day terminal len
                 }
             } else {
@@ -59,7 +64,11 @@ struct TerminalScreen: View {
                     .lineLimit(1)
             }
 
-            if !session.isRunning {
+            if readOnly {
+                Text("Lịch sử trên máy")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            } else if !session.isRunning {
                 Text("Phiên đã thoát")
                     .font(.caption2)
                     .foregroundColor(.secondary)

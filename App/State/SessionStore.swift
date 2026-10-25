@@ -58,6 +58,7 @@ public final class SessionStore: ObservableObject {
         do {
             try await api.deleteSession(id: id)
             self.sessions.removeAll { $0.id == id }
+            SessionLogStore.shared.remove(id: id)
             self.error = nil
         } catch {
             self.error = error.localizedDescription

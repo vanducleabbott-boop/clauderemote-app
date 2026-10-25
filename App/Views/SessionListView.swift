@@ -12,6 +12,15 @@ struct SessionListView: View {
     @State private var showNewSession: Bool = false
     @State private var showSettings: Bool = false
     @Environment(\.scenePhase) private var scenePhase
+    /// Tang len de tinh lai danh sach lich su tren may sau khi xoa
+    @State private var localVersion: Int = 0
+
+    /// Lich su luu tren iPhone cua cac phien khong con tren server
+    private var localOnly: [SessionLogStore.Meta] {
+        _ = localVersion
+        let ids = Set(store.sessions.map(\.id))
+        return SessionLogStore.shared.allMetas().filter { !ids.contains($0.id) }
+    }
 
     var body: some View {
         List {
@@ -61,7 +70,26 @@ struct SessionListView: View {
                     }
                 }
             }
+
+            if !localOnly.isEmpty {
+                Section("Lịch sử trên máy (phiên đã đóng)") {
+                    ForEach(localOnly) { meta in
+                        NavigationLink(destination: TerminalScreen(session: Self.session(from: meta), readOnly: true)) {
+                            localRow(meta)
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                SessionLogStore.shared.remove(id: meta.id)
+                                localVersion += 1
+                            } label: {
+                                Label("Xóa", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+            }
         }
+        .onAppear { localVersion += 1 }
         .navigationTitle("Phiên terminal")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -100,6 +128,35 @@ struct SessionListView: View {
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
             }
         }
+    }
+
+    private static func session(from meta: SessionLogStore.Meta) -> Session {
+        Session(id: meta.id, name: meta.name, cwd: meta.cwd, mode: "normal", tool: meta.tool, status: "exited")
+    }
+
+    private static func formatSize(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
+    @ViewBuilder
+    private func localRow(_ meta: SessionLogStore.Meta) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(meta.name)
+                    .font(.headline)
+                    .lineLimit(1)
+                Spacer()
+                Text(Self.formatSize(meta.bytes))
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            Text(meta.cwd)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .padding(.vertical, 4)
     }
 
     @ViewBuilder
@@ -142,8 +199,14 @@ struct SessionListView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
 
+                Spacer()
+                if let saved = SessionLogStore.shared.meta(for: session.id), saved.bytes > 0 {
+                    // Dung luong lich su da luu tren iPhone
+                    Text(Self.formatSize(saved.bytes))
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
                 if let clients = session.clients, clients > 0 {
-                    Spacer()
                     Text("\(clients) máy")
                         .font(.caption2)
                         .foregroundColor(.secondary)

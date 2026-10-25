@@ -10,7 +10,9 @@ import UIKit
 import SwiftTerm
 
 struct TerminalHost: UIViewRepresentable {
-    let url: URL
+    let session: Session
+    /// nil = chi xem lich su da luu tren may (phien khong con tren server)
+    let url: URL?
     @Binding var state: TerminalConnection.State
     var accessoryProvider: ((TerminalView, TerminalConnection) -> UIView?)? = nil
 
@@ -29,17 +31,35 @@ struct TerminalHost: UIViewRepresentable {
         // Mac dinh SwiftTerm chi giu 500 dong -> khong cuon lai duoc dau phien
         terminalView.changeScrollback(20000)
 
-        let connection = TerminalConnection(url: url)
+        let logStore = SessionLogStore.shared
+        let session = self.session
+        let connection = TerminalConnection(url: url ?? URL(string: "about:blank")!)
         coordinator.connection = connection
         coordinator.terminalView = terminalView
 
-        connection.onData = { [weak terminalView] data in
-            terminalView?.feed(byteArray: ArraySlice(data))
+        // Noi lai tu vi tri da luu tren may: server chi gui phan moi
+        connection.resumeOffset = {
+            logStore.resumeOffset(for: session.id)
         }
 
-        // Moi lan (noi lai) server phat lai ca bo dem: gui ESC c (RIS) xoa sach terminal truoc,
-        // neu khong noi dung cu bi in chong len nhau
-        connection.onReset = { [weak terminalView] in
+        connection.onHello = { [weak coordinator, weak terminalView] offset, gap in
+            coordinator?.storing = true
+            if let marker = logStore.handleHello(session: session, offset: offset, gap: gap) {
+                terminalView?.feed(byteArray: ArraySlice(marker))
+            }
+        }
+
+        connection.onData = { [weak coordinator, weak terminalView] data in
+            terminalView?.feed(byteArray: ArraySlice(data))
+            if coordinator?.storing == true {
+                logStore.append(id: session.id, data: data)
+            }
+        }
+
+        // Server cu (khong resume) phat lai ca bo dem: gui ESC c (RIS) xoa sach terminal truoc,
+        // neu khong noi dung cu bi in chong len nhau; khong luu vi khong biet vi tri
+        connection.onReset = { [weak coordinator, weak terminalView] in
+            coordinator?.storing = false
             terminalView?.feed(byteArray: [0x1B, 0x63])
         }
 
@@ -57,17 +77,46 @@ struct TerminalHost: UIViewRepresentable {
             }
         }
 
+        guard url != nil else {
+            // Chi xem: nap lich su tren may, khong ket noi
+            let readOnlyState = _state
+            DispatchQueue.main.async { readOnlyState.wrappedValue = .disconnected(reason: "chỉ xem lịch sử") }
+            Self.feedLocalLog(id: session.id, into: terminalView) {}
+            return terminalView
+        }
+
         if let accessoryProvider = accessoryProvider {
             terminalView.inputAccessoryView = accessoryProvider(terminalView, connection)
         }
 
-        connection.connect()
+        // Hien lich su da luu truoc, xong moi ket noi (tranh xen ke du lieu cu/moi)
+        Self.feedLocalLog(id: session.id, into: terminalView) { [weak connection] in
+            connection?.connect()
+        }
 
         DispatchQueue.main.async {
             terminalView.becomeFirstResponder()
         }
 
         return terminalView
+    }
+
+    /// Doc phan cuoi log tren may roi feed tung khuc 256KB moi vong runloop de giao dien khong dung hinh.
+    private static func feedLocalLog(id: String, into terminalView: TerminalView, completion: @escaping () -> Void) {
+        SessionLogStore.shared.readTail(id: id) { [weak terminalView] data in
+            let chunkSize = 256 * 1024
+            func feed(from start: Int) {
+                guard let terminalView = terminalView else { return }
+                guard start < data.count else {
+                    completion()
+                    return
+                }
+                let end = min(start + chunkSize, data.count)
+                terminalView.feed(byteArray: ArraySlice(data[start..<end]))
+                DispatchQueue.main.async { feed(from: end) }
+            }
+            feed(from: 0)
+        }
     }
 
     func updateUIView(_ uiView: TerminalView, context: Context) {
@@ -83,6 +132,8 @@ struct TerminalHost: UIViewRepresentable {
     final class Coordinator: NSObject, TerminalViewDelegate {
         var connection: TerminalConnection?
         weak var terminalView: TerminalView?
+        /// true sau khi server gui hello (biet vi tri) -> output duoc luu vao may
+        var storing = false
 
         override init() {
             super.init()
@@ -99,6 +150,7 @@ struct TerminalHost: UIViewRepresentable {
         }
 
         @objc private func handleWillEnterForeground() {
+            guard connection?.url.scheme != "about" else { return }
             // Khong ngat ket noi con song (tranh tai lai 400KB moi lan mo app), chi noi lai neu da chet
             connection?.ensureAlive()
         }

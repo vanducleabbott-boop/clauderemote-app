@@ -22,6 +22,11 @@ public final class TerminalConnection: NSObject, URLSessionWebSocketDelegate {
     /// (server se phat lai toan bo bo dem -> can xoa terminal de khong in lap).
     public var onReset: (() -> Void)?
     public var onState: ((State) -> Void)?
+    /// Server ho tro resume: goi tren main truoc du lieu cua lan ket noi do.
+    /// offset = vi tri tren server cua byte dau tien sap nhan; gap = co doan bi mat.
+    public var onHello: ((_ offset: Int64, _ gap: Bool) -> Void)?
+    /// Vi tri da luu tren may (gui ?since=); nil = chua co gi, server gui toan bo bo dem.
+    public var resumeOffset: (() -> Int64?)?
 
     public private(set) var state: State = .disconnected(reason: nil) {
         didSet {
@@ -59,6 +64,7 @@ public final class TerminalConnection: NSObject, URLSessionWebSocketDelegate {
     private var pendingReset = false
     private var receivedFirst = false
     private var flushScheduled = false
+    private var pendingHello: (offset: Int64, gap: Bool)?
 
     public init(url: URL) {
         self.url = url
@@ -86,7 +92,7 @@ public final class TerminalConnection: NSObject, URLSessionWebSocketDelegate {
         let newSession = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
         self.session = newSession
 
-        let newTask = newSession.webSocketTask(with: url)
+        let newTask = newSession.webSocketTask(with: connectURL())
         newTask.maximumMessageSize = maxMessageSize
         self.task = newTask
 
@@ -194,6 +200,7 @@ public final class TerminalConnection: NSObject, URLSessionWebSocketDelegate {
         generation += 1
         pending.removeAll(keepingCapacity: false)
         pendingReset = false
+        pendingHello = nil
         receivedFirst = false
         lock.unlock()
 
@@ -210,14 +217,18 @@ public final class TerminalConnection: NSObject, URLSessionWebSocketDelegate {
 
             switch result {
             case .success(let message):
-                let chunk: Data
+                var chunk = Data()
+                var hello: (offset: Int64, gap: Bool)?
                 switch message {
                 case .data(let data):
                     chunk = data
                 case .string(let text):
-                    chunk = Data(text.utf8)
+                    hello = Self.parseHello(text)
+                    if hello == nil {
+                        chunk = Data(text.utf8)
+                    }
                 @unknown default:
-                    chunk = Data()
+                    break
                 }
 
                 self.lock.lock()
@@ -227,7 +238,13 @@ public final class TerminalConnection: NSObject, URLSessionWebSocketDelegate {
                 }
                 if !self.receivedFirst {
                     self.receivedFirst = true
-                    self.pendingReset = true
+                    if hello == nil {
+                        // Server cu (khong resume): no gui lai ca bo dem -> xoa terminal truoc
+                        self.pendingReset = true
+                    }
+                }
+                if let hello = hello {
+                    self.pendingHello = hello
                 }
                 self.pending.append(chunk)
                 let needSchedule = !self.flushScheduled
@@ -253,24 +270,49 @@ public final class TerminalConnection: NSObject, URLSessionWebSocketDelegate {
     private func flush(generation gen: Int) {
         lock.lock()
         flushScheduled = false
-        guard gen == generation, !pending.isEmpty else {
+        guard gen == generation, !pending.isEmpty || pendingHello != nil else {
             lock.unlock()
             return
         }
         let data = pending
         let reset = pendingReset
+        let hello = pendingHello
         pending = Data()
         pendingReset = false
+        pendingHello = nil
         lock.unlock()
 
         guard !isManuallyClosed else { return }
         if state != .connected {
             markConnected()
         }
+        if let hello = hello {
+            onHello?(hello.offset, hello.gap)
+        }
         if reset {
             onReset?()
         }
-        onData?(data)
+        if !data.isEmpty {
+            onData?(data)
+        }
+    }
+
+    private func connectURL() -> URL {
+        let since: Int64 = resumeOffset?() ?? -1
+        guard var comps = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        var items = comps.queryItems ?? []
+        items.removeAll { $0.name == "since" }
+        items.append(URLQueryItem(name: "since", value: String(since)))
+        comps.queryItems = items
+        return comps.url ?? url
+    }
+
+    /// {"type":"hello","offset":N,"gap":bool,...} -> (N, gap); tin khac -> nil
+    private static func parseHello(_ text: String) -> (offset: Int64, gap: Bool)? {
+        guard text.hasPrefix("{\"type\":\"hello\""),
+              let obj = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any],
+              let offset = (obj["offset"] as? NSNumber)?.int64Value else { return nil }
+        return (offset, (obj["gap"] as? Bool) ?? false)
     }
 
     private func startPing() {
