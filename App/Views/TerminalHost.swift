@@ -23,7 +23,7 @@ struct TerminalHost: UIViewRepresentable {
     func makeUIView(context: Context) -> TerminalView {
         let coordinator = context.coordinator
 
-        let terminalView = TerminalView(frame: .zero)
+        let terminalView = RemoteTerminalView(frame: .zero)
         terminalView.font = UIFont.monospacedSystemFont(ofSize: 13, weight: .regular)
         terminalView.nativeBackgroundColor = .black
         terminalView.nativeForegroundColor = UIColor(white: 0.9, alpha: 1)
