@@ -96,6 +96,8 @@ struct AssistantTextView: View {
                     SelectableText(text: t, onOpenFile: { actions.openFile($0, nil) })
                 case .code(let lang, let code):
                     CodeBlockView(language: lang, code: code)
+                case .table(let table):
+                    TableBlockView(table: table)
                 }
             }
             if event.streaming != true, let text = event.text, !text.isEmpty {
@@ -154,6 +156,82 @@ struct CodeBlockView: View {
         .background(Color.black.opacity(0.3))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.08)))
+    }
+}
+
+/// Bang that: khung o, tieu de dam, o dai tu xuong dong, bang rong cuon ngang, nut Chep (dan vao Excel)
+struct TableBlockView: View {
+    let table: Markdown.TableData
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ScrollView(.horizontal, showsIndicators: true) {
+                TableGrid(table: table)
+                    .padding(.bottom, 2)
+            }
+
+            Button {
+                UIPasteboard.general.string = table.tsv
+                copied = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+            } label: {
+                Label(copied ? "Đã chép bảng" : "Chép bảng", systemImage: copied ? "checkmark" : "tablecells")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+struct TableGrid: View {
+    let table: Markdown.TableData
+    private static let maxCellWidth: CGFloat = 240
+
+    var body: some View {
+        Grid(alignment: .topLeading, horizontalSpacing: 0, verticalSpacing: 0) {
+                    GridRow {
+                        ForEach(0..<table.columnCount, id: \.self) { c in
+                            cell(c < table.header.count ? table.header[c] : "", column: c, header: true)
+                        }
+                    }
+                    .background(Color.white.opacity(0.08))
+                    ForEach(Array(table.rows.enumerated()), id: \.offset) { r, row in
+                        GridRow {
+                            ForEach(0..<table.columnCount, id: \.self) { c in
+                                cell(c < row.count ? row[c] : "", column: c, header: false)
+                            }
+                        }
+                        .background(r % 2 == 1 ? Color.white.opacity(0.03) : Color.clear)
+                    }
+                }
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.white.opacity(0.15)))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func cell(_ text: String, column: Int, header: Bool) -> some View {
+        let align = column < table.aligns.count ? table.aligns[column] : .leading
+        let frameAlign: Alignment = align == .center ? .top : align == .trailing ? .topTrailing : .topLeading
+        let textAlign: TextAlignment = align == .center ? .center : align == .trailing ? .trailing : .leading
+        return Text(Markdown.cellAttributed(text, bold: header))
+            .font(.system(size: 14))
+            .foregroundColor(.primary)
+            .multilineTextAlignment(textAlign)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: Self.maxCellWidth, alignment: frameAlign)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: frameAlign)
+            .overlay(alignment: .trailing) {
+                if column < table.columnCount - 1 {
+                    Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
+            }
+            .textSelection(.enabled)
     }
 }
 

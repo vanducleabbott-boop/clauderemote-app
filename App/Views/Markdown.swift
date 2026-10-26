@@ -8,6 +8,7 @@
 //
 
 import UIKit
+import SwiftUI
 
 enum Theme {
     static let accent = UIColor(red: 0.85, green: 0.47, blue: 0.34, alpha: 1)      // cam Claude
@@ -57,39 +58,134 @@ enum Markdown {
     enum Segment: Equatable {
         case text(String)
         case code(language: String, code: String)
+        case table(TableData)
     }
 
-    /// Tach khoi ``` ra rieng (hien thanh the code co nen + cuon ngang); khoi chua dong (dang viet) van la code
+    struct TableData: Equatable {
+        enum Align: Equatable { case leading, center, trailing }
+        var header: [String]
+        var rows: [[String]]
+        var aligns: [Align]
+
+        var columnCount: Int { max(header.count, rows.map(\.count).max() ?? 0) }
+
+        /// Chep: tab giua cot, xuong dong giua hang -> dan vao Excel / Google Sheets giu dung cot
+        var tsv: String {
+            ([header] + rows).map { row in
+                row.map { Markdown.plainCell($0) }.joined(separator: "\t")
+            }.joined(separator: "\n")
+        }
+    }
+
+    /// Tach khoi ``` va bang markdown ra rieng (hien thanh the co nen / bang that, cuon ngang);
+    /// khoi code chua dong (dang viet) van la code
     static func segments(_ text: String) -> [Segment] {
         var out: [Segment] = []
         var buffer: [String] = []
-        var code: [String]?
-        var lang = ""
         func flushText() {
             let t = buffer.joined(separator: "\n").trimmingCharacters(in: .newlines)
             if !t.isEmpty { out.append(.text(t)) }
             buffer = []
         }
-        for line in text.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n") {
+        let lines = text.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
+        var i = 0
+        while i < lines.count {
+            let line = lines[i]
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if code != nil {
-                if trimmed.hasPrefix("```") {
-                    out.append(.code(language: lang, code: code!.joined(separator: "\n")))
-                    code = nil
-                } else {
-                    code!.append(line)
-                }
-            } else if trimmed.hasPrefix("```") {
+            if trimmed.hasPrefix("```") {
                 flushText()
-                lang = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
-                code = []
-            } else {
-                buffer.append(line)
+                let lang = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                var code: [String] = []
+                i += 1
+                while i < lines.count, !lines[i].trimmingCharacters(in: .whitespaces).hasPrefix("```") {
+                    code.append(lines[i])
+                    i += 1
+                }
+                out.append(.code(language: lang, code: code.joined(separator: "\n")))
+                i += 1
+                continue
             }
+            // Bang: dong "| a | b |" ngay sau la dong phan cach "|---|:--:|"
+            if trimmed.hasPrefix("|"), i + 1 < lines.count, let aligns = separatorAligns(lines[i + 1]) {
+                flushText()
+                let header = tableCells(trimmed)
+                var rows: [[String]] = []
+                i += 2
+                while i < lines.count {
+                    let t = lines[i].trimmingCharacters(in: .whitespaces)
+                    guard t.hasPrefix("|") else { break }
+                    rows.append(tableCells(t))
+                    i += 1
+                }
+                out.append(.table(TableData(header: header, rows: rows, aligns: aligns)))
+                continue
+            }
+            buffer.append(line)
+            i += 1
         }
-        if let code = code { out.append(.code(language: lang, code: code.joined(separator: "\n"))) }
         flushText()
         return out
+    }
+
+    /// "| a | b \\| c |" -> ["a", "b | c"]
+    static func tableCells(_ line: String) -> [String] {
+        var t = line.trimmingCharacters(in: .whitespaces)
+        if t.hasPrefix("|") { t.removeFirst() }
+        if t.hasSuffix("|") && !t.hasSuffix("\\|") { t.removeLast() }
+        var cells: [String] = []
+        var cur = ""
+        var escape = false
+        for ch in t {
+            if escape { cur.append(ch); escape = false; continue }
+            if ch == "\\" { escape = true; continue }
+            if ch == "|" { cells.append(cur.trimmingCharacters(in: .whitespaces)); cur = ""; continue }
+            cur.append(ch)
+        }
+        cells.append(cur.trimmingCharacters(in: .whitespaces))
+        return cells
+    }
+
+    private static func separatorAligns(_ line: String) -> [TableData.Align]? {
+        let t = line.trimmingCharacters(in: .whitespaces)
+        guard t.contains("-"), t.contains("|") || t.contains(":") else { return nil }
+        let cells = tableCells(t)
+        var aligns: [TableData.Align] = []
+        for c in cells {
+            guard !c.isEmpty, c.allSatisfy({ "-: ".contains($0) }), c.contains("-") else { return nil }
+            let left = c.hasPrefix(":"), right = c.hasSuffix(":")
+            aligns.append(left && right ? .center : right ? .trailing : .leading)
+        }
+        return aligns
+    }
+
+    /// Bo ky hieu markdown trong o bang (khi chep)
+    static func plainCell(_ s: String) -> String {
+        var t = s.replacingOccurrences(of: #"\[([^\]]*)\]\([^)]*\)"#, with: "$1", options: .regularExpression)
+        for mark in ["**", "__", "`", "~~"] { t = t.replacingOccurrences(of: mark, with: "") }
+        return t.replacingOccurrences(of: "<br>", with: " ")
+    }
+
+    /// O bang: markdown trong dong -> AttributedString cho SwiftUI Text; <br> -> xuong dong
+    static func cellAttributed(_ s: String, bold: Bool) -> AttributedString {
+        let src = s.replacingOccurrences(of: "<br>", with: "\n").replacingOccurrences(of: "<br/>", with: "\n")
+        var a = (try? AttributedString(
+            markdown: src,
+            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace, failurePolicy: .returnPartiallyParsedIfPossible)
+        )) ?? AttributedString(src)
+        for run in a.runs {
+            let intent = run.inlinePresentationIntent ?? []
+            if intent.contains(.code) {
+                a[run.range].font = .system(size: 13, design: .monospaced)
+                a[run.range].backgroundColor = Color.white.opacity(0.08)
+            }
+            if run.link != nil {
+                a[run.range].foregroundColor = Color(Theme.accent)
+            }
+        }
+        if bold {
+            a.font = .system(size: 14, weight: .semibold)
+        }
+        return a
     }
 
     static func render(_ text: String, size: CGFloat = bodySize, color: UIColor = Theme.text) -> NSAttributedString {

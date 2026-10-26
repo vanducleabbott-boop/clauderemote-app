@@ -58,3 +58,22 @@ final class ListFormatTests: XCTestCase {
         XCTAssertTrue(ChatRow.relative(Date().addingTimeInterval(-130)).contains("phút"))
     }
 }
+
+final class TableTests: XCTestCase {
+    func testSplitTable() {
+        let segs = Markdown.segments("Bảng:\n| Tên | Điểm | Ghi chú |\n|:---|---:|:---:|\n| **An** | 8 | a \\| b |\n| Bình | 9 |\nSau bảng")
+        guard segs.count == 3, case .table(let t) = segs[1] else { return XCTFail("\(segs)") }
+        XCTAssertEqual(segs[0], .text("Bảng:"))
+        XCTAssertEqual(segs[2], .text("Sau bảng"))
+        XCTAssertEqual(t.header, ["Tên", "Điểm", "Ghi chú"])
+        XCTAssertEqual(t.aligns, [.leading, .trailing, .center])
+        XCTAssertEqual(t.rows, [["**An**", "8", "a | b"], ["Bình", "9"]])
+        XCTAssertEqual(t.columnCount, 3)
+        XCTAssertEqual(t.tsv, "Tên\tĐiểm\tGhi chú\nAn\t8\ta | b\nBình\t9")
+    }
+
+    func testPipeLinesWithoutSeparatorStayText() {
+        let segs = Markdown.segments("| chỉ một dòng |\nchữ")
+        XCTAssertEqual(segs, [.text("| chỉ một dòng |\nchữ")])
+    }
+}
