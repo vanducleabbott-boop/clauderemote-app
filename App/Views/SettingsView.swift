@@ -8,7 +8,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var settings: AppSettings
-    @EnvironmentObject private var store: SessionStore
+    @EnvironmentObject private var store: ChatStore
 
     @State private var isTesting: Bool = false
     @State private var statusMessage: String? = nil
@@ -85,8 +85,8 @@ struct SettingsView: View {
         let api = settings.makeAPI()
         Task {
             do {
-                let count = try await api.checkConnection()
-                statusMessage = "Kết nối được, \(count) phiên"
+                let count = try await api.listChats().count
+                statusMessage = "Kết nối được, \(count) cuộc chat"
                 isStatusSuccess = true
             } catch {
                 statusMessage = error.localizedDescription

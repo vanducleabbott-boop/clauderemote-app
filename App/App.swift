@@ -8,7 +8,7 @@ import SwiftUI
 @main
 struct ClaudeRemoteApp: App {
     @StateObject private var settings = AppSettings()
-    @StateObject private var store = SessionStore()
+    @StateObject private var store = ChatStore()
 
     var body: some Scene {
         WindowGroup {

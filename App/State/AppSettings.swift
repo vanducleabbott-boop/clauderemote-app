@@ -49,7 +49,8 @@ public final class AppSettings: ObservableObject {
             UserDefaults.standard.set(defaultURL, forKey: Keys.baseURL)
         }
         self.baseURL = savedURL ?? defaultURL
-        self.token = Keychain.get(Keys.token) ?? ""
+        // Tham so khoi dong "-token X" (chay thu tren may ao) khi Keychain chua co
+        self.token = Keychain.get(Keys.token) ?? UserDefaults.standard.string(forKey: Keys.token) ?? ""
 
         if let savedDirs = UserDefaults.standard.stringArray(forKey: Keys.recentDirs), !savedDirs.isEmpty {
             self.recentDirs = savedDirs
