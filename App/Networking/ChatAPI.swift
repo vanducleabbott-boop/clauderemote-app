@@ -112,6 +112,29 @@ public struct ChatSocketMessage: Decodable {
     public let reset: Bool?
 }
 
+/// Lenh "/" goi y trong o nhap
+public struct SlashCommand: Codable, Identifiable, Equatable {
+    public let name: String
+    public let desc: String
+    /// Can go them chu sau lenh (vd /model sonnet)
+    public let args: Bool?
+    public let skill: Bool?
+    public var id: String { name }
+
+    /// Lenh khop chu dang go (bo dau "/"): bat dau bang truoc, chua sau
+    public static func filter(_ all: [SlashCommand], draft: String) -> [SlashCommand] {
+        guard draft.hasPrefix("/"), !draft.contains(where: { $0.isWhitespace }) else { return [] }
+        let q = draft.dropFirst().lowercased()
+        if q.isEmpty { return all }
+        let starts = all.filter { $0.name.lowercased().hasPrefix(q) }
+        let contains = all.filter { !$0.name.lowercased().hasPrefix(q) && $0.name.lowercased().contains(q) }
+        let result = starts + contains
+        // Go du ten lenh roi thi an goi y
+        if result.count == 1, result[0].name.lowercased() == q { return [] }
+        return result
+    }
+}
+
 public struct ClaudeHistoryItem: Codable, Identifiable, Equatable {
     public let sessionId: String
     public let cwd: String
@@ -230,6 +253,12 @@ extension ServerAPI {
     public func claudeHistory(limit: Int = 80) async throws -> [ClaudeHistoryItem] {
         let (data, _) = try await perform(request: try makeRequest(path: "/api/claude-history?limit=\(limit)", method: "GET"))
         return try decode([ClaudeHistoryItem].self, data)
+    }
+
+    public func commands(chatId: String) async throws -> [SlashCommand] {
+        struct Reply: Decodable { let commands: [SlashCommand] }
+        let (data, _) = try await perform(request: try makeRequest(path: "/api/chats/\(chatId)/commands", method: "GET"))
+        return try decode(Reply.self, data).commands
     }
 
     public func chatSocketURL(chatId: String, since: Int) -> URL? {

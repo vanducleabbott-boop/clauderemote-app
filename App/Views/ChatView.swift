@@ -32,6 +32,7 @@ struct ChatView: View {
     @State private var showImporter = false
     @State private var renaming = false
     @State private var newName = ""
+    @State private var commands: [SlashCommand] = []
     @FocusState private var inputFocused: Bool
 
     init(meta: ChatMeta, api: ServerAPI) {
@@ -113,6 +114,17 @@ struct ChatView: View {
         .onAppear {
             session.start()
             if meta.isBusy { busySince = Date() }
+        }
+        .task {
+            #if DEBUG
+            // Thu tren may ao: -draft "/co" dien san o nhap
+            if let d = UserDefaults.standard.string(forKey: "draft"), draft.isEmpty { draft = d }
+            #endif
+            await loadCommands()
+        }
+        .onChange(of: draft) { text in
+            // Moi lan bat dau go "/" thi lay lai (ky nang moi co sau tin dau tien cua phien)
+            if text == "/" { Task { await loadCommands() } }
         }
         .onDisappear {
             session.stop()
@@ -265,6 +277,14 @@ struct ChatView: View {
                 }
             }
 
+            let suggestions = SlashCommand.filter(commands, draft: draft)
+            if !suggestions.isEmpty {
+                CommandSuggestions(commands: suggestions) { cmd in
+                    draft = "/" + cmd.name + (cmd.args == true ? " " : "")
+                    inputFocused = true
+                }
+            }
+
             VStack(spacing: 6) {
                 TextField("Nhắn cho \(meta.toolName)…", text: $draft, axis: .vertical)
                     .lineLimit(1...8)
@@ -336,6 +356,10 @@ struct ChatView: View {
         .padding(.top, 6)
         .padding(.bottom, 8)
         .background(Color.chatBackground)
+    }
+
+    private func loadCommands() async {
+        if let list = try? await api.commands(chatId: meta.id) { commands = list }
     }
 
     private var canSend: Bool {

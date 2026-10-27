@@ -77,3 +77,21 @@ final class TableTests: XCTestCase {
         XCTAssertEqual(segs, [.text("| chỉ một dòng |\nchữ")])
     }
 }
+
+final class SlashCommandTests: XCTestCase {
+    private let all = [
+        SlashCommand(name: "usage", desc: "", args: nil, skill: nil),
+        SlashCommand(name: "model", desc: "", args: true, skill: nil),
+        SlashCommand(name: "code-review", desc: "", args: true, skill: true),
+        SlashCommand(name: "context", desc: "", args: nil, skill: nil)
+    ]
+
+    func testFilter() {
+        XCTAssertEqual(SlashCommand.filter(all, draft: "/").count, 4)
+        XCTAssertEqual(SlashCommand.filter(all, draft: "/co").map(\.name), ["code-review", "context"])
+        XCTAssertEqual(SlashCommand.filter(all, draft: "/review").map(\.name), ["code-review"])
+        XCTAssertEqual(SlashCommand.filter(all, draft: "/usage"), [])
+        XCTAssertEqual(SlashCommand.filter(all, draft: "/model so"), [])
+        XCTAssertEqual(SlashCommand.filter(all, draft: "hi /"), [])
+    }
+}
