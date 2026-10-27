@@ -18,6 +18,10 @@ extension Color {
 /// Hanh dong tu cac khoi tin nhan (mo file, tra loi quyen)
 struct ChatActions {
     var openFile: (String, Int64?) -> Void
+    /// Tai file ket qua ve may (co cache), tra ve file tren iPhone
+    var fetchFile: (ChatFile) async throws -> URL
+    /// Xem file da tai trong app (QuickLook)
+    var preview: (URL) -> Void
     var answer: (ChatEvent, PermissionDecision, [String: String]?) -> Void
 }
 
@@ -490,7 +494,10 @@ struct ResultFilesCard: View {
             Label("File kết quả", systemImage: "folder.fill")
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(.green)
-            FileChips(files: event.files ?? [], actions: actions, alignment: .leading)
+            let files = event.files ?? []
+            ForEach(files) { f in
+                DocumentCard(file: f, actions: actions, large: files.count <= 3)
+            }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -539,6 +546,28 @@ struct FileChips: View {
 }
 
 enum FileIcon {
+    static func kind(for file: String) -> String {
+        switch (file as NSString).pathExtension.lowercased() {
+        case "pdf": return "PDF"
+        case "doc", "docx": return "Word"
+        case "xls", "xlsx", "xlsm": return "Excel"
+        case "csv": return "CSV"
+        case "ppt", "pptx": return "PowerPoint"
+        case "txt", "md", "rtf": return "Văn bản"
+        default: return (file as NSString).pathExtension.uppercased()
+        }
+    }
+
+    static func color(for file: String) -> Color {
+        switch (file as NSString).pathExtension.lowercased() {
+        case "pdf": return Color(red: 0.86, green: 0.25, blue: 0.22)
+        case "doc", "docx": return Color(red: 0.17, green: 0.42, blue: 0.82)
+        case "xls", "xlsx", "xlsm", "csv": return Color(red: 0.13, green: 0.55, blue: 0.32)
+        case "ppt", "pptx": return Color(red: 0.85, green: 0.42, blue: 0.18)
+        default: return .claudeAccent
+        }
+    }
+
     static func name(for file: String) -> String {
         switch (file as NSString).pathExtension.lowercased() {
         case "jpg", "jpeg", "png", "heic", "gif", "webp": return "photo"

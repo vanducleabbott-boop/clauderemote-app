@@ -35,6 +35,8 @@ public struct ChatFile: Codable, Equatable, Hashable, Identifiable {
     public let name: String
     public let size: Int64?
     public let path: String?
+    /// Thoi diem sua tren PC (ms) -> file sua lai thi tai ban moi
+    public var mtime: Double? = nil
     public var id: String { path ?? name }
 }
 
@@ -257,12 +259,13 @@ extension ServerAPI {
     }
 
     /// Tai file tren PC ve Caches de xem (dung lai neu da tai cung kich thuoc).
-    public func downloadFile(chatId: String, path remotePath: String, size: Int64? = nil) async throws -> URL {
+    public func downloadFile(chatId: String, path remotePath: String, size: Int64? = nil, mtime: Double? = nil) async throws -> URL {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         let fileName = remotePath.split(whereSeparator: { $0 == "/" || $0 == "\\" }).last.map(String.init) ?? "file"
         // FNV-1a: khoa on dinh giua cac lan mo app (hashValue doi moi lan chay)
         var hash: UInt64 = 0xcbf29ce484222325
-        for byte in remotePath.utf8 {
+        let cacheName = mtime.map { remotePath + "|" + String(Int64($0)) } ?? remotePath
+        for byte in cacheName.utf8 {
             hash = (hash ^ UInt64(byte)) &* 0x100000001b3
         }
         let key = String(hash, radix: 36)

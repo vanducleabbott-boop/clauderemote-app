@@ -219,6 +219,11 @@ struct ChatView: View {
     private var actions: ChatActions {
         ChatActions(
             openFile: { path, size in openFile(path, size: size) },
+            fetchFile: { [api, chatId = meta.id] file in
+                guard let path = file.path else { throw APIError.networkError("Không có đường dẫn file") }
+                return try await api.downloadFile(chatId: chatId, path: path, size: file.size, mtime: file.mtime)
+            },
+            preview: { url in previewURL = url },
             answer: { event, decision, answers in answer(event, decision, answers) }
         )
     }
