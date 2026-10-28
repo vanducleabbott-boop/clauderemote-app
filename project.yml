@@ -20,7 +20,7 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
     info:
       path: App/Info.plist
-      properties:
+      properties: &infoProps
         CFBundleDisplayName: "Claude Remote"
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
@@ -35,6 +35,28 @@ targets:
         NSLocationDefaultAccuracyReduced: true
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+  # Ban di qua Cloudflare Tunnel (khong can VPN): bundle id + ten + bieu tuong rieng -> cai song song voi ban Tailscale
+  ClaudeRemoteCF:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+        excludes: [Info.plist]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ducle.clauderemote.cf
+        PRODUCT_NAME: ClaudeRemoteCF
+        MARKETING_VERSION: "4.2"
+        CURRENT_PROJECT_VERSION: "30"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIconCF
+        GENERATE_INFOPLIST_FILE: NO
+    info:
+      path: CF/Info.plist
+      properties:
+        <<: *infoProps
+        CFBundleDisplayName: "Claude CF"
   ClaudeRemoteTests:
     type: bundle.unit-test
     platform: iOS
@@ -53,3 +75,7 @@ schemes:
     test:
       targets:
         - ClaudeRemoteTests
+  ClaudeRemoteCF:
+    build:
+      targets:
+        ClaudeRemoteCF: all
