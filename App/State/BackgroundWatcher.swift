@@ -36,10 +36,6 @@ final class BackgroundWatcher: NSObject, ObservableObject {
     private var makeAPI: (() -> ServerAPI?)?
     private var pollTask: Task<Void, Never>?
     private var seen: [String: (status: String, done: Int)] = [:]
-    /// Bao "app da ngung chay" (meo cua Clip / Zalo luu tru)
-    private static let killedNoticeId = "clauderemote.app-da-ngung-chay"
-    private static let killedNoticeEvery: TimeInterval = 5
-    private var killedNoticeOn = false
 
     private override init() {
         // Mac dinh BAT (giong Zalo luu tru): mo app la xin quyen thong bao + vi tri, chay ngam ngay
@@ -54,6 +50,13 @@ final class BackgroundWatcher: NSObject, ObservableObject {
         locationManager.activityType = .other
         locationManager.pausesLocationUpdatesAutomatically = false
         UNUserNotificationCenter.current().delegate = self
+        // Giong Zalo luu tru: moi lan ra nen thi bat lai theo doi vi tri
+        NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
+            Task { @MainActor in
+                let w = BackgroundWatcher.shared
+                if w.enabled { w.startLocation() }
+            }
+        }
     }
 
     /// Goi 1 lan luc mo app (ke ca khi iOS mo lai app o nen vi doi vi tri)
@@ -75,7 +78,7 @@ final class BackgroundWatcher: NSObject, ObservableObject {
             break
         }
         startLocation()
-        startKilledNotice()
+        KilledNotice.shared.start()
         guard pollTask == nil else { return }
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -89,42 +92,18 @@ final class BackgroundWatcher: NSObject, ObservableObject {
         pollTask?.cancel()
         pollTask = nil
         seen = [:]
-        killedNoticeOn = false
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Self.killedNoticeId])
+        KilledNotice.shared.stop()
         locationManager.stopUpdatingLocation()
-        locationManager.stopMonitoringSignificantLocationChanges()
         locationManager.allowsBackgroundLocationUpdates = false
     }
 
-    private func startLocation() {
+    fileprivate func startLocation() {
         let st = locationManager.authorizationStatus
         guard st == .authorizedAlways || st == .authorizedWhenInUse else { return }
         locationManager.allowsBackgroundLocationUpdates = true
         // Quyen "Luon luon" thi iOS khong hien vien xanh bao dung vi tri o nen
         locationManager.showsBackgroundLocationIndicator = false
         locationManager.startUpdatingLocation()
-        // iOS tu mo lai app o nen khi di chuyen xa (neu app bi he thong tat)
-        locationManager.startMonitoringSignificantLocationChanges()
-    }
-
-    /// Cu 5s hen lai 1 thong bao sau 6s cung ma -> app con song thi khong bao gio hien;
-    /// app bi vuot tat / iOS dung thi khong ai hen lai -> 6s sau hien, cham vao la mo lai app
-    private func startKilledNotice() {
-        guard !killedNoticeOn else { return }
-        killedNoticeOn = true
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Self.killedNoticeId])
-        scheduleKilledNotice()
-    }
-
-    private func scheduleKilledNotice() {
-        guard killedNoticeOn else { return }
-        let content = UNMutableNotificationContent()
-        content.title = "Claude Remote đã ngừng chạy"
-        content.body = "Chạm để mở lại, nếu không sẽ không nhận được thông báo khi Claude / agy làm xong."
-        content.sound = .default
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: Self.killedNoticeEvery + 1, repeats: false)
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: Self.killedNoticeId, content: content, trigger: trigger))
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.killedNoticeEvery) { [weak self] in self?.scheduleKilledNotice() }
     }
 
     func openSettings() {
@@ -191,5 +170,43 @@ extension BackgroundWatcher: UNUserNotificationCenterDelegate {
             if let id { pendingChatId = id }
             completionHandler()
         }
+    }
+}
+
+/// Bao "app da ngung chay" - meo cua Clip / Zalo luu tru (BaoAppDaTat): cu 5s hen lai 1 thong bao sau 6s cung ma
+/// -> app con song thi khong bao gio kip hien; app bi vuot tat thi khong ai hen lai -> 6s sau hien, cham la mo lai.
+/// Chay tren luong nen (khong phai luong chinh) giong Zalo luu tru.
+final class KilledNotice {
+    static let shared = KilledNotice()
+    private let id = "clauderemote.app-da-ngung-chay"
+    private let every: TimeInterval = 5
+    private let queue = DispatchQueue(label: "clauderemote.killed-notice")
+    private var running = false
+
+    func start() {
+        queue.async {
+            guard !self.running else { return }
+            self.running = true
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [self.id])
+            self.schedule()
+        }
+    }
+
+    func stop() {
+        queue.async {
+            self.running = false
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [self.id])
+        }
+    }
+
+    private func schedule() {
+        guard running else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Claude Remote đã ngừng chạy"
+        content.body = "Chạm để mở lại, nếu không sẽ không nhận được thông báo khi Claude / agy làm xong."
+        content.sound = .default
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: every + 1, repeats: false)
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+        queue.asyncAfter(deadline: .now() + every) { [weak self] in self?.schedule() }
     }
 }
