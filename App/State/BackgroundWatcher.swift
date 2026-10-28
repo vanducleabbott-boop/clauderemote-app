@@ -16,12 +16,20 @@ final class BackgroundWatcher: NSObject, ObservableObject {
     static let shared = BackgroundWatcher()
 
     private static let enabledKey = "bgNotify"
+    private static let hideArrowKey = "bgHideArrow"
     private static let interval: UInt64 = 4_000_000_000
 
     @Published var enabled: Bool {
         didSet {
             UserDefaults.standard.set(enabled, forKey: Self.enabledKey)
             enabled ? start() : stop()
+        }
+    }
+    /// v3.8: an mui ten dinh vi canh camera (vi tri gan dung nhu Zalo luu tru). Tat = cach v3.7 (~3 km), chac giu nen hon
+    @Published var hideArrow: Bool {
+        didSet {
+            UserDefaults.standard.set(hideArrow, forKey: Self.hideArrowKey)
+            if enabled { applyAccuracy(); startLocation() }
         }
     }
     @Published private(set) var locationStatus: CLAuthorizationStatus
@@ -42,14 +50,11 @@ final class BackgroundWatcher: NSObject, ObservableObject {
     private override init() {
         // Mac dinh BAT (giong Zalo luu tru): mo app la xin quyen thong bao + vi tri, chay ngam ngay
         enabled = UserDefaults.standard.object(forKey: Self.enabledKey) as? Bool ?? true
+        hideArrow = UserDefaults.standard.object(forKey: Self.hideArrowKey) as? Bool ?? true
         locationStatus = locationManager.authorizationStatus
         super.init()
         locationManager.delegate = self
-        // v3.7: cach cua Zalo luu tru (kCLLocationAccuracyReduced + distanceFilter toi da) bi iOS coi la
-        // "tiet kiem pin", hau nhu khong gui vi tri -> tren iPhone that app van bi dung sau khi ra nen.
-        // ~3 km (song di dong/Wi-Fi, khong bat GPS) + nhan moi cap nhat de luong vi tri that su chay.
-        locationManager.desiredAccuracy = kCLLocationAccuracyThreeKilometers
-        locationManager.distanceFilter = kCLDistanceFilterNone
+        applyAccuracy()
         locationManager.activityType = .other
         locationManager.pausesLocationUpdatesAutomatically = false
         UNUserNotificationCenter.current().delegate = self
@@ -120,6 +125,13 @@ final class BackgroundWatcher: NSObject, ObservableObject {
         locationManager.allowsBackgroundLocationUpdates = false
     }
 
+    /// An mui ten: vi tri gan dung (kCLLocationAccuracyReduced, giong Zalo luu tru) - iOS khong hien mui ten.
+    /// Giu nen van nho CLBackgroundActivitySession (v3.7 chay lien tuc ca buoi). Khong an: ~3 km nhu v3.7.
+    private func applyAccuracy() {
+        locationManager.desiredAccuracy = hideArrow ? kCLLocationAccuracyReduced : kCLLocationAccuracyThreeKilometers
+        locationManager.distanceFilter = kCLDistanceFilterNone
+    }
+
     fileprivate func startLocation() {
         let st = locationManager.authorizationStatus
         guard st == .authorizedAlways || st == .authorizedWhenInUse else { return }
@@ -133,8 +145,10 @@ final class BackgroundWatcher: NSObject, ObservableObject {
         if #available(iOS 17.0, *), activitySession == nil {
             activitySession = CLBackgroundActivitySession()
         }
-        // App bi iOS tat han -> iOS mo lai app o nen khi vi tri doi dang ke (~500 m)
-        if always { locationManager.startMonitoringSignificantLocationChanges() }
+        // App bi iOS tat han -> iOS mo lai app o nen khi vi tri doi dang ke (~500 m).
+        // Theo doi nay lam iOS hien mui ten rong -> chi bat khi khong an mui ten
+        if always && !hideArrow { locationManager.startMonitoringSignificantLocationChanges() }
+        else { locationManager.stopMonitoringSignificantLocationChanges() }
     }
 
     func openSettings() {
