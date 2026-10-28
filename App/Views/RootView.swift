@@ -11,6 +11,45 @@ struct RootView: View {
     @State private var showSettings = false
     @State private var path = NavigationPath()
     @ObservedObject private var watcher = BackgroundWatcher.shared
+    @ObservedObject private var access = CloudflareAccess.shared
+    @State private var refreshWarning: Bool = false
+
+    private var isWarningVisible: Bool {
+        _ = refreshWarning
+        _ = access.showLogin
+        return CloudflareAccess.daysLeftWarning
+    }
+
+    @ViewBuilder
+    private var expiryBanner: some View {
+        if isWarningVisible, let exp = CloudflareAccess.expiryDate {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.black)
+                Text("Phiên Cloudflare hết hạn \(CloudflareAccess.formatExpiry(exp))")
+                    .font(.footnote)
+                    .foregroundColor(.black)
+                    .lineLimit(1)
+                Spacer()
+                Button("Đăng nhập lại") {
+                    CloudflareAccess.clear()
+                    refreshWarning.toggle()
+                    if let url = URL(string: ServerAPI.normalizeBaseURL(settings.baseURL)) {
+                        access.requestLogin(baseURL: url)
+                    }
+                }
+                .font(.footnote.weight(.semibold))
+                .foregroundColor(.black)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.black.opacity(0.15))
+                .cornerRadius(6)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color.yellow)
+        }
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -34,12 +73,46 @@ struct RootView: View {
                 }
         }
         .tint(.claudeAccent)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            expiryBanner
+        }
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
+        .sheet(isPresented: Binding(
+            get: { access.showLogin && !showSettings },
+            set: { access.showLogin = $0 }
+        )) {
+            let normalized = ServerAPI.normalizeBaseURL(settings.baseURL)
+            let fallbackURL = URL(string: normalized)
+            CloudflareLoginSheet(baseURL: access.loginURL ?? fallbackURL) {
+                refreshWarning.toggle()
+            }
+        }
         .onAppear {
+            refreshWarning.toggle()
             if !settings.isConfigured {
                 showSettings = true
+            } else if let url = URL(string: ServerAPI.normalizeBaseURL(settings.baseURL)), url.scheme != nil {
+                if CloudflareAccess.cookie == nil {
+                    access.requestLogin(baseURL: url)
+                } else {
+                    Task {
+                        await CloudflareAccess.preloadWebCookies(for: url)
+                    }
+                    CloudflareAccess.scheduleExpiryNotification()
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: CloudflareAccess.didLoginNotification)) { _ in
+            refreshWarning.toggle()
+        }
+        .onChange(of: access.showLogin) { _ in
+            refreshWarning.toggle()
+        }
+        .onChange(of: showSettings) { isShown in
+            if !isShown {
+                refreshWarning.toggle()
             }
         }
         // Cham vao thong bao "da xong" -> mo dung chat

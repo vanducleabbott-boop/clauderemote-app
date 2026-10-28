@@ -40,13 +40,19 @@ public final class AppSettings: ObservableObject {
     }
 
     public init() {
-        let defaultURL = "https://desktop-krdjkc2.tailbd558a.ts.net:8444"
-        let oldDefaultURL = "https://desktop-krdjkc2.tailbd558a.ts.net:8443"
+        let defaultURL = "https://claude.nhaduc.name.vn"
+        let oldDefaultURLs: Set<String> = [
+            "https://desktop-krdjkc2.tailbd558a.ts.net:8444",
+            "https://desktop-krdjkc2.tailbd558a.ts.net:8443"
+        ]
         var savedURL = UserDefaults.standard.string(forKey: Keys.baseURL)
-        // Nguoi dung dang dung URL mac dinh cu (8443) thi tu chuyen sang 8444.
-        if let saved = savedURL, saved.trimmingCharacters(in: CharacterSet(charactersIn: "/ \n")) == oldDefaultURL {
-            savedURL = defaultURL
-            UserDefaults.standard.set(defaultURL, forKey: Keys.baseURL)
+        // Nguoi dung dang dung URL mac dinh cu (8443 hoac 8444) thi tu chuyen sang URL moi.
+        if let saved = savedURL {
+            let trimmed = saved.trimmingCharacters(in: CharacterSet(charactersIn: "/ \t\n\r"))
+            if oldDefaultURLs.contains(trimmed) {
+                savedURL = defaultURL
+                UserDefaults.standard.set(defaultURL, forKey: Keys.baseURL)
+            }
         }
         self.baseURL = savedURL ?? defaultURL
         // Tham so khoi dong "-token X" (chay thu tren may ao) khi Keychain chua co

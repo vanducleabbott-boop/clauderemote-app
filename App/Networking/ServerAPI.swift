@@ -16,6 +16,7 @@ public enum APIError: LocalizedError, Equatable {
     case missingConfiguration
     case invalidURL
     case unauthorized
+    case accessRequired
     case httpError(statusCode: Int, message: String?)
     case networkError(String)
     case invalidResponse
@@ -29,6 +30,8 @@ public enum APIError: LocalizedError, Equatable {
             return "Địa chỉ máy chủ (URL) không hợp lệ."
         case .unauthorized:
             return "Mã token không hợp lệ hoặc đã hết hạn (401 Unauthorized)."
+        case .accessRequired:
+            return "Cần đăng nhập Cloudflare, đăng nhập xong thử lại"
         case .httpError(let code, let message):
             if code == 409 { return "Đang chạy, đợi xong lượt này rồi gửi tiếp." }
             if code == 404, message?.contains("not found") == true {
@@ -62,6 +65,8 @@ public enum APIError: LocalizedError, Equatable {
 // MARK: - ServerAPI
 
 public final class ServerAPI {
+    public static var lastBaseURL: URL?
+
     public let baseURL: String
     public let token: String
     private let urlSession: URLSession
@@ -69,6 +74,7 @@ public final class ServerAPI {
     public init(baseURL: String, token: String) {
         self.baseURL = Self.normalizeBaseURL(baseURL)
         self.token = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        Self.lastBaseURL = URL(string: self.baseURL)
 
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 15.0
@@ -127,6 +133,7 @@ public final class ServerAPI {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = body
         }
+        CloudflareAccess.apply(to: &request)
         return request
     }
 
@@ -142,6 +149,15 @@ public final class ServerAPI {
     }
 
     static func check(_ response: URLResponse, data: Data?) throws -> HTTPURLResponse {
+        if CloudflareAccess.isAccessResponse(response, data: data) {
+            CloudflareAccess.clear()
+            if let baseURL = lastBaseURL ?? response.url {
+                Task { @MainActor in
+                    CloudflareAccess.shared.requestLogin(baseURL: baseURL)
+                }
+            }
+            throw APIError.accessRequired
+        }
         guard let http = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
         }

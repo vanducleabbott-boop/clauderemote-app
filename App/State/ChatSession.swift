@@ -25,6 +25,7 @@ final class ChatSession: ObservableObject {
     private var pingTimer: Timer?
     private var saveWork: DispatchWorkItem?
     private var active = false
+    private var loginObserver: NSObjectProtocol?
 
     private static let socketSession: URLSession = {
         let config = URLSessionConfiguration.default
@@ -42,11 +43,24 @@ final class ChatSession: ObservableObject {
 
     func start() {
         active = true
+        if loginObserver == nil {
+            loginObserver = NotificationCenter.default.addObserver(
+                forName: CloudflareAccess.didLoginNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.reconnectNow()
+            }
+        }
         if task == nil { connect() }
     }
 
     func stop() {
         active = false
+        if let observer = loginObserver {
+            NotificationCenter.default.removeObserver(observer)
+            loginObserver = nil
+        }
         disconnect()
         saveCache()
     }
@@ -80,7 +94,9 @@ final class ChatSession: ObservableObject {
         guard active, let url = api.chatSocketURL(chatId: meta.id, since: maxSeq) else { return }
         generation += 1
         let gen = generation
-        let task = Self.socketSession.webSocketTask(with: url)
+        var req = URLRequest(url: url)
+        CloudflareAccess.apply(to: &req)
+        let task = Self.socketSession.webSocketTask(with: req)
         task.maximumMessageSize = 64 * 1024 * 1024
         self.task = task
         task.resume()
@@ -109,6 +125,13 @@ final class ChatSession: ObservableObject {
                     }
                     self.receive(task, gen)
                 case .failure:
+                    if CloudflareAccess.isAccessResponse(task.response, data: nil) || CloudflareAccess.cookie == nil {
+                        CloudflareAccess.clear()
+                        if !CloudflareAccess.shared.showLogin, let url = ServerAPI.lastBaseURL {
+                            CloudflareAccess.shared.requestLogin(baseURL: url)
+                        }
+                        self.retryDelay = max(self.retryDelay, 5)
+                    }
                     self.scheduleReconnect(gen)
                 }
             }

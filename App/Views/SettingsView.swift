@@ -10,16 +10,28 @@ struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var store: ChatStore
     @ObservedObject private var watcher = BackgroundWatcher.shared
+    @ObservedObject private var access = CloudflareAccess.shared
 
     @State private var isTesting: Bool = false
     @State private var statusMessage: String? = nil
     @State private var isStatusSuccess: Bool = false
+    @State private var refreshExpiry: Bool = false
+
+    private var expiryText: String {
+        _ = refreshExpiry
+        _ = access.showLogin
+        if let exp = CloudflareAccess.expiryDate {
+            return CloudflareAccess.formatExpiry(exp)
+        } else {
+            return "chưa đăng nhập"
+        }
+    }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("URL máy chủ") {
-                    TextField("https://desktop-krdjkc2.tailbd558a.ts.net:8444", text: $settings.baseURL)
+                    TextField("https://claude.nhaduc.name.vn", text: $settings.baseURL)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
@@ -52,6 +64,18 @@ struct SettingsView: View {
                             Text(message)
                                 .foregroundColor(isStatusSuccess ? .green : .red)
                                 .font(.footnote)
+                        }
+                    }
+                }
+
+                Section("Cloudflare") {
+                    LabeledContent("Phiên hết hạn", value: expiryText)
+                    Button("Đăng nhập lại Cloudflare") {
+                        CloudflareAccess.clear()
+                        refreshExpiry.toggle()
+                        let normalized = ServerAPI.normalizeBaseURL(settings.baseURL)
+                        if let url = URL(string: normalized) {
+                            access.requestLogin(baseURL: url)
                         }
                     }
                 }
@@ -98,6 +122,16 @@ struct SettingsView: View {
                     .fontWeight(.bold)
                 }
             }
+        }
+        .sheet(isPresented: $access.showLogin) {
+            let normalized = ServerAPI.normalizeBaseURL(settings.baseURL)
+            let fallbackURL = URL(string: normalized)
+            CloudflareLoginSheet(baseURL: access.loginURL ?? fallbackURL) {
+                refreshExpiry.toggle()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: CloudflareAccess.didLoginNotification)) { _ in
+            refreshExpiry.toggle()
         }
     }
 
