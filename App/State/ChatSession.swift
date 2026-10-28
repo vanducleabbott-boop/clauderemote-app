@@ -125,10 +125,10 @@ final class ChatSession: ObservableObject {
                     }
                     self.receive(task, gen)
                 case .failure:
-                    if CloudflareAccess.isAccessResponse(task.response, data: nil) || CloudflareAccess.cookie == nil {
-                        CloudflareAccess.clear()
-                        if !CloudflareAccess.shared.showLogin, let url = ServerAPI.lastBaseURL {
-                            CloudflareAccess.shared.requestLogin(baseURL: url)
+                    // Mat ket noi thuong (ra nen, doi mang) khong phai het dang nhap -> khong xoa cookie
+                    if CloudflareAccess.isAccessResponse(task.response, data: nil) {
+                        if let url = ServerAPI.lastBaseURL {
+                            CloudflareAccess.shared.handleAccessRequired(baseURL: url)
                         }
                         self.retryDelay = max(self.retryDelay, 5)
                     }

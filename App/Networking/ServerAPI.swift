@@ -150,10 +150,9 @@ public final class ServerAPI {
 
     static func check(_ response: URLResponse, data: Data?) throws -> HTTPURLResponse {
         if CloudflareAccess.isAccessResponse(response, data: data) {
-            CloudflareAccess.clear()
             if let baseURL = lastBaseURL ?? response.url {
                 Task { @MainActor in
-                    CloudflareAccess.shared.requestLogin(baseURL: baseURL)
+                    CloudflareAccess.shared.handleAccessRequired(baseURL: baseURL)
                 }
             }
             throw APIError.accessRequired

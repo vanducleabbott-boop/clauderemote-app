@@ -14,8 +14,8 @@ public final class CloudflareAccess: ObservableObject {
     public static let shared = CloudflareAccess()
     public static let didLoginNotification = Notification.Name("CloudflareAccessDidLogin")
 
-    private static let cookieKey = "cf_authorization"
-    private static let expKey = "cf_authorization_exp"
+    static let cookieKey = "cf_authorization"
+    static let expKey = "cf_authorization_exp"
     private static let notificationIdentifier = "cloudflare-access-expiry-clauderemote"
 
     @Published public var showLogin: Bool = false
@@ -23,9 +23,21 @@ public final class CloudflareAccess: ObservableObject {
 
     private init() {}
 
+    /// Giu cookie trong bo nho: doc Keychain loi luc may khoa khong lam mat cookie dang dung
+    private static var cachedCookie: String?
+
     /// Cookie CF_Authorization lay tu Keychain.
     public static var cookie: String? {
-        Keychain.get(cookieKey)
+        if let c = cachedCookie { return c }
+        cachedCookie = Keychain.get(cookieKey)
+        return cachedCookie
+    }
+
+    /// Cookie con han (theo exp trong JWT). Khong doc duoc exp thi coi nhu con han.
+    public static var cookieValid: Bool {
+        guard cookie != nil else { return false }
+        guard let exp = expiryDate else { return true }
+        return exp > Date()
     }
 
     /// Thoi diem het han cua phien Cloudflare Access lay tu Keychain.
@@ -72,6 +84,7 @@ public final class CloudflareAccess: ObservableObject {
 
     /// Luu cookie CF_Authorization vao Keychain va cap nhat thoi gian het han + dat thong bao.
     public static func save(_ value: String) {
+        cachedCookie = value
         Keychain.set(value, for: cookieKey)
         if let exp = jwtExpiry(value) {
             Keychain.set(String(Int(exp.timeIntervalSince1970)), for: expKey)
@@ -83,6 +96,7 @@ public final class CloudflareAccess: ObservableObject {
 
     /// Xoa cookie khoi Keychain, HTTPCookieStorage va WKWebsiteDataStore, huy thong bao het han.
     public static func clear() {
+        cachedCookie = nil
         Keychain.delete(cookieKey)
         Keychain.delete(expKey)
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [notificationIdentifier])
@@ -180,7 +194,9 @@ public final class CloudflareAccess: ObservableObject {
             }
         }
 
-        // 3. Content-Type chua "text/html" va data bat dau (sau khi bo khoang trang) bang "<" ma khong phai JSON
+        // 3. Content-Type chua "text/html" va data bat dau (sau khi bo khoang trang) bang "<" ma khong phai JSON.
+        // Bo qua loi 5xx: trang loi HTML cua Cloudflare (502/530 khi tunnel/PC chap chon) KHONG phai bat dang nhap
+        if httpResponse.statusCode >= 500 { return false }
         let contentType = (httpResponse.value(forHTTPHeaderField: "Content-Type") ?? "").lowercased()
         if contentType.contains("text/html"), let data = data, !data.isEmpty {
             if let prefixString = String(data: data.prefix(1024), encoding: .utf8) {
@@ -195,6 +211,15 @@ public final class CloudflareAccess: ObservableObject {
     }
 
     /// Yeu cau hien thi man hinh dang nhap Cloudflare Access tren MainActor.
+    /// Server bao can dang nhap. Chi xoa cookie khi no that su het han; app o nen thi khong mo trang dang nhap
+    /// (cho lan mo app sau). Truoc v4.3: o nen + may khoa -> xoa cookie -> vao lai app bi bat dang nhap.
+    @MainActor
+    public func handleAccessRequired(baseURL: URL) {
+        if !Self.cookieValid { Self.clear() }
+        guard UIApplication.shared.applicationState == .active, !showLogin else { return }
+        requestLogin(baseURL: baseURL)
+    }
+
     @MainActor
     public func requestLogin(baseURL: URL) {
         self.loginURL = baseURL

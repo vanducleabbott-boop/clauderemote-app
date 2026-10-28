@@ -26,6 +26,9 @@ public enum Keychain {
 
         var newQuery = query
         newQuery[kSecValueData as String] = data
+        // Doc duoc ca khi iPhone dang khoa man hinh (app chay nen). Mac dinh WhenUnlocked -> may khoa thi
+        // doc ra nil, app tuong mat dang nhap Cloudflare va xoa cookie (v4.3)
+        newQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         SecItemAdd(newQuery as CFDictionary, nil)
     }
 
@@ -45,6 +48,14 @@ public enum Keychain {
             return String(data: data, encoding: .utf8)
         }
         return nil
+    }
+
+    /// Muc luu tu ban cu (WhenUnlocked) -> luu lai voi AfterFirstUnlock. Goi luc mo app (may dang mo khoa).
+    public static func migrateAccessibility(keys: [String]) {
+        let flag = "keychainAfterFirstUnlock"
+        guard !UserDefaults.standard.bool(forKey: flag) else { return }
+        for key in keys { if let v = get(key) { set(v, for: key) } }
+        UserDefaults.standard.set(true, forKey: flag)
     }
 
     /// Xoa gia tri tu Keychain theo key.

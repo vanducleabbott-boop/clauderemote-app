@@ -34,4 +34,25 @@ final class CloudflareAccessTests: XCTestCase {
         XCTAssertNil(CloudflareAccess.jwtExpiry("abc"))
         XCTAssertNil(CloudflareAccess.jwtExpiry("a.b.c"))
     }
+
+    private func response(_ code: Int, html: Bool = true) -> HTTPURLResponse {
+        HTTPURLResponse(url: URL(string: "https://claude.example.com/api/chats")!, statusCode: code, httpVersion: nil,
+                        headerFields: ["Content-Type": html ? "text/html; charset=UTF-8" : "application/json"])!
+    }
+
+    // Trang loi HTML cua Cloudflare khi tunnel/PC chap chon khong duoc coi la bat dang nhap (v4.3)
+    func testCloudflareErrorPageIsNotLogin() {
+        let page = Data("<!DOCTYPE html><title>502 Bad gateway</title>".utf8)
+        XCTAssertFalse(CloudflareAccess.isAccessResponse(response(502), data: page))
+        XCTAssertFalse(CloudflareAccess.isAccessResponse(response(530), data: page))
+        XCTAssertFalse(CloudflareAccess.isAccessResponse(response(200, html: false), data: Data("[]".utf8)))
+    }
+
+    func testAccessLoginPageIsLogin() {
+        let page = Data("<html><body>Sign in</body></html>".utf8)
+        XCTAssertTrue(CloudflareAccess.isAccessResponse(response(200), data: page))
+        let redirected = HTTPURLResponse(url: URL(string: "https://team.cloudflareaccess.com/cdn-cgi/access/login")!,
+                                         statusCode: 200, httpVersion: nil, headerFields: nil)!
+        XCTAssertTrue(CloudflareAccess.isAccessResponse(redirected, data: nil))
+    }
 }
