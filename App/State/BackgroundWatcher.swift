@@ -145,9 +145,16 @@ final class BackgroundWatcher: NSObject, ObservableObject {
         // an di thi iOS dung cap nhat vi tri o nen -> app bi treo sau ~30s
         locationManager.showsBackgroundLocationIndicator = !always
         locationManager.startUpdatingLocation()
-        // iOS 17+: cach giu nen chinh thuc cua Apple (quyen "Luon luon" thi khong hien vien xanh)
-        if #available(iOS 17.0, *), activitySession == nil {
-            activitySession = CLBackgroundActivitySession()
+        // iOS 17+: phien nen chinh thuc cua Apple - giu app song chac nhat, NHUNG iOS hien mui ten xanh trong
+        // Dynamic Island suot luc app o nen (video nguoi dung 28/10/2026, ca v3.7-3.9). An mui ten -> bo phien,
+        // giu nen chi bang vi tri dung y Zalo luu tru
+        if #available(iOS 17.0, *) {
+            if hideArrow {
+                (activitySession as? CLBackgroundActivitySession)?.invalidate()
+                activitySession = nil
+            } else if activitySession == nil {
+                activitySession = CLBackgroundActivitySession()
+            }
         }
         // App bi iOS tat han -> iOS mo lai app o nen khi vi tri doi dang ke (~500 m).
         // Theo doi nay lam iOS hien mui ten rong -> chi bat khi khong an mui ten

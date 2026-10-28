@@ -76,7 +76,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Thông báo")
                 } footer: {
-                    Text("Báo khi Claude / agy làm xong hoặc cần bạn trả lời, kể cả khi bạn đang dùng app khác. App dùng quyền vị trí (độ chính xác thấp, không gửi đi đâu) chỉ để iOS cho chạy ngầm, giống app Clip. Nếu app bị vuốt tắt sẽ có thông báo nhắc mở lại app. \"Ẩn mũi tên định vị\": dùng vị trí gần đúng để không hiện mũi tên cạnh camera; nếu app hay bị dừng ở nền thì tắt mục này.")
+                    Text("Báo khi Claude / agy làm xong hoặc cần bạn trả lời, kể cả khi bạn đang dùng app khác. App dùng quyền vị trí (độ chính xác thấp, không gửi đi đâu) chỉ để iOS cho chạy ngầm, giống app Clip. Nếu app bị vuốt tắt sẽ có thông báo nhắc mở lại app. \"Ẩn mũi tên định vị\": không hiện mũi tên xanh cạnh camera (giữ nền giống Zalo lưu trữ). Nếu app hay bị dừng ở nền thì tắt mục này: app chạy ngầm chắc chắn hơn nhưng iOS sẽ hiện mũi tên.")
                 }
 
                 Section("Thông tin") {
