@@ -404,6 +404,14 @@ struct ChatView: View {
         errorText = nil
         draft = ""
         attachments = []
+        // Bo go tieng Viet (Telex/VNI) dang giu chu dang go do (marked text) se ghi lai chu vao o
+        // sau khi xoa -> xoa them lan nua khi bo go da chot, neu o chi con chu cua tin vua gui
+        for delay in [0.05, 0.25, 0.6] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                let left = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                if errorText == nil && !left.isEmpty && text.contains(left) { draft = "" }
+            }
+        }
         let api = self.api
         let chatId = meta.id
 
