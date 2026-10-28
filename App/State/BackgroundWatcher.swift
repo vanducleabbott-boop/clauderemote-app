@@ -36,6 +36,8 @@ final class BackgroundWatcher: NSObject, ObservableObject {
     private var makeAPI: (() -> ServerAPI?)?
     private var pollTask: Task<Void, Never>?
     private var seen: [String: (status: String, done: Int)] = [:]
+    /// iOS 17+: phien chay nen chinh thuc - dung khi chua co quyen "Luon luon" (chi "Khi dung app")
+    private var activitySession: AnyObject?
 
     private override init() {
         // Mac dinh BAT (giong Zalo luu tru): mo app la xin quyen thong bao + vi tri, chay ngam ngay
@@ -72,7 +74,8 @@ final class BackgroundWatcher: NSObject, ObservableObject {
             Task { @MainActor in self.notifyAllowed = ok }
         }
         switch locationManager.authorizationStatus {
-        case .notDetermined:
+        case .notDetermined, .authorizedWhenInUse:
+            // Dang "Khi dung app" -> iOS hoi nang len "Luon luon" (chi hoi 1 lan)
             locationManager.requestAlwaysAuthorization()
         default:
             break
@@ -93,6 +96,8 @@ final class BackgroundWatcher: NSObject, ObservableObject {
         pollTask = nil
         seen = [:]
         KilledNotice.shared.stop()
+        if #available(iOS 17.0, *) { (activitySession as? CLBackgroundActivitySession)?.invalidate() }
+        activitySession = nil
         locationManager.stopUpdatingLocation()
         locationManager.allowsBackgroundLocationUpdates = false
     }
@@ -100,10 +105,15 @@ final class BackgroundWatcher: NSObject, ObservableObject {
     fileprivate func startLocation() {
         let st = locationManager.authorizationStatus
         guard st == .authorizedAlways || st == .authorizedWhenInUse else { return }
+        let always = st == .authorizedAlways
         locationManager.allowsBackgroundLocationUpdates = true
-        // Quyen "Luon luon" thi iOS khong hien vien xanh bao dung vi tri o nen
-        locationManager.showsBackgroundLocationIndicator = false
+        // "Luon luon": an vien xanh giong Zalo luu tru. "Khi dung app": iOS bat buoc hien vien xanh,
+        // an di thi iOS dung cap nhat vi tri o nen -> app bi treo sau ~30s
+        locationManager.showsBackgroundLocationIndicator = !always
         locationManager.startUpdatingLocation()
+        if !always, #available(iOS 17.0, *), activitySession == nil {
+            activitySession = CLBackgroundActivitySession()
+        }
     }
 
     func openSettings() {

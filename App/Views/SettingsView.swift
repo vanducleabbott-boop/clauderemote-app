@@ -60,7 +60,7 @@ struct SettingsView: View {
                     Toggle("Chạy ngầm & báo khi xong", isOn: $watcher.enabled)
                     if watcher.enabled {
                         statusRow(ok: watcher.keepsAlive,
-                                  text: watcher.keepsAlive ? "Vị trí: Luôn luôn — app chạy ngầm được" : "Vị trí chưa đặt \"Luôn luôn\" — app sẽ bị tắt khi ở nền")
+                                  text: watcher.keepsAlive ? "Vị trí: Luôn luôn — app chạy ngầm được" : "Vị trí chưa đặt \"Luôn luôn\" — vào Cài đặt iPhone › Claude Remote › Vị trí để đổi")
                         statusRow(ok: watcher.notifyAllowed,
                                   text: watcher.notifyAllowed ? "Đã cho phép thông báo" : "Chưa cho phép thông báo")
                         if !watcher.keepsAlive || !watcher.notifyAllowed {
