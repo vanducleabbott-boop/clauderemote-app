@@ -63,6 +63,7 @@ struct SettingsView: View {
                                   text: watcher.keepsAlive ? "Vị trí: Luôn luôn — app chạy ngầm được" : "Vị trí chưa đặt \"Luôn luôn\" — vào Cài đặt iPhone › Claude Remote › Vị trí để đổi")
                         statusRow(ok: watcher.notifyAllowed,
                                   text: watcher.notifyAllowed ? "Đã cho phép thông báo" : "Chưa cho phép thông báo")
+                        NavigationLink("Nhật ký chạy ngầm") { BackgroundLogView() }
                         if !watcher.keepsAlive || !watcher.notifyAllowed {
                             Button("Mở Cài đặt iPhone") { watcher.openSettings() }
                         }
@@ -70,7 +71,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Thông báo")
                 } footer: {
-                    Text("Báo khi Claude / agy làm xong hoặc cần bạn trả lời, kể cả khi bạn đang dùng app khác. App dùng quyền vị trí (độ chính xác thấp, không gửi đi đâu) chỉ để iOS cho chạy ngầm, giống app Clip. Nếu app bị vuốt tắt, 6 giây sau sẽ có thông báo nhắc mở lại app.")
+                    Text("Báo khi Claude / agy làm xong hoặc cần bạn trả lời, kể cả khi bạn đang dùng app khác. App dùng quyền vị trí (độ chính xác thấp, không gửi đi đâu) chỉ để iOS cho chạy ngầm, giống app Clip. Nếu app bị vuốt tắt sẽ có thông báo nhắc mở lại app.")
                 }
 
                 Section("Thông tin") {
@@ -120,5 +121,19 @@ struct SettingsView: View {
             }
             isTesting = false
         }
+    }
+}
+
+struct BackgroundLogView: View {
+    @State private var lines = BackgroundLog.lines
+
+    var body: some View {
+        List(Array(lines.enumerated()), id: \.offset) { _, line in
+            Text(line).font(.system(.footnote, design: .monospaced))
+        }
+        .overlay { if lines.isEmpty { Text("Chưa có").foregroundColor(.secondary) } }
+        .navigationTitle("Nhật ký chạy ngầm")
+        .navigationBarTitleDisplayMode(.inline)
+        .refreshable { lines = BackgroundLog.lines }
     }
 }

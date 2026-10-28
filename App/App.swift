@@ -8,6 +8,8 @@ import SwiftUI
 final class AppDelegate: NSObject, UIApplicationDelegate {
     // Chay ca khi iOS mo app o nen (doi vi tri) - luc do chua co man hinh SwiftUI
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        let bg = launchOptions?[.location] != nil ? " (iOS mở lại ở nền do vị trí)" : ""
+        BackgroundLog.add("Mở app" + bg)
         BackgroundWatcher.shared.configure {
             let s = AppSettings()
             return s.isConfigured ? s.makeAPI() : nil
