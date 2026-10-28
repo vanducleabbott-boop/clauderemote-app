@@ -42,7 +42,8 @@ final class BackgroundWatcher: NSObject, ObservableObject {
     private var killedNoticeOn = false
 
     private override init() {
-        enabled = UserDefaults.standard.bool(forKey: Self.enabledKey)
+        // Mac dinh BAT (giong Zalo luu tru): mo app la xin quyen thong bao + vi tri, chay ngam ngay
+        enabled = UserDefaults.standard.object(forKey: Self.enabledKey) as? Bool ?? true
         locationStatus = locationManager.authorizationStatus
         super.init()
         locationManager.delegate = self
