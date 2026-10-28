@@ -27,6 +27,16 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Chọn "Luôn luôn" để app chạy ngầm và báo khi Claude / agy làm xong. App không lưu hay gửi vị trí của bạn đi đâu.</string>
+	<key>NSLocationDefaultAccuracyReduced</key>
+	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>App dùng quyền vị trí chỉ để được chạy ngầm và báo khi Claude / agy làm xong. Vị trí không được lưu hay gửi đi.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiresFullScreen</key>

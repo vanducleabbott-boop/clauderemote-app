@@ -12,8 +12,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ducle.clauderemote
         PRODUCT_NAME: ClaudeRemote
-        MARKETING_VERSION: "3.4"
-        CURRENT_PROJECT_VERSION: "19"
+        MARKETING_VERSION: "3.5"
+        CURRENT_PROJECT_VERSION: "20"
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_VERSION: "5.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -29,6 +29,10 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         UIUserInterfaceStyle: Dark
         ITSAppUsesNonExemptEncryption: false
+        UIBackgroundModes: [location]
+        NSLocationAlwaysAndWhenInUseUsageDescription: "Chọn \"Luôn luôn\" để app chạy ngầm và báo khi Claude / agy làm xong. App không lưu hay gửi vị trí của bạn đi đâu."
+        NSLocationWhenInUseUsageDescription: "App dùng quyền vị trí chỉ để được chạy ngầm và báo khi Claude / agy làm xong. Vị trí không được lưu hay gửi đi."
+        NSLocationDefaultAccuracyReduced: true
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
   ClaudeRemoteTests:

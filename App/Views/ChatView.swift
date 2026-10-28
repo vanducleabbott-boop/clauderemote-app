@@ -112,6 +112,7 @@ struct ChatView: View {
             }
         }
         .onAppear {
+            BackgroundWatcher.shared.openChatId = meta.id
             session.start()
             if meta.isBusy { busySince = Date() }
         }
@@ -127,6 +128,7 @@ struct ChatView: View {
             if text == "/" { Task { await loadCommands() } }
         }
         .onDisappear {
+            if BackgroundWatcher.shared.openChatId == meta.id { BackgroundWatcher.shared.openChatId = nil }
             session.stop()
             store.upsert(session.meta)
         }

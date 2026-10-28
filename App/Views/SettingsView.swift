@@ -9,6 +9,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var store: ChatStore
+    @ObservedObject private var watcher = BackgroundWatcher.shared
 
     @State private var isTesting: Bool = false
     @State private var statusMessage: String? = nil
@@ -55,6 +56,23 @@ struct SettingsView: View {
                     }
                 }
 
+                Section {
+                    Toggle("Chạy ngầm & báo khi xong", isOn: $watcher.enabled)
+                    if watcher.enabled {
+                        statusRow(ok: watcher.keepsAlive,
+                                  text: watcher.keepsAlive ? "Vị trí: Luôn luôn — app chạy ngầm được" : "Vị trí chưa đặt \"Luôn luôn\" — app sẽ bị tắt khi ở nền")
+                        statusRow(ok: watcher.notifyAllowed,
+                                  text: watcher.notifyAllowed ? "Đã cho phép thông báo" : "Chưa cho phép thông báo")
+                        if !watcher.keepsAlive || !watcher.notifyAllowed {
+                            Button("Mở Cài đặt iPhone") { watcher.openSettings() }
+                        }
+                    }
+                } header: {
+                    Text("Thông báo")
+                } footer: {
+                    Text("Báo khi Claude / agy làm xong hoặc cần bạn trả lời, kể cả khi bạn đang dùng app khác. App dùng quyền vị trí (độ chính xác thấp, không gửi đi đâu) chỉ để iOS cho chạy ngầm, giống app Clip. Nếu app bị vuốt tắt, 6 giây sau sẽ có thông báo nhắc mở lại app.")
+                }
+
                 Section("Thông tin") {
                     LabeledContent("Phiên bản", value: AppSettings.versionText)
                 }
@@ -74,6 +92,14 @@ struct SettingsView: View {
                     .fontWeight(.bold)
                 }
             }
+        }
+    }
+
+    private func statusRow(ok: Bool, text: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundColor(ok ? .green : .orange)
+            Text(text).font(.footnote)
         }
     }
 

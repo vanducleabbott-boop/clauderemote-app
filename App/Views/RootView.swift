@@ -10,6 +10,7 @@ struct RootView: View {
     @EnvironmentObject private var store: ChatStore
     @State private var showSettings = false
     @State private var path = NavigationPath()
+    @ObservedObject private var watcher = BackgroundWatcher.shared
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -39,6 +40,15 @@ struct RootView: View {
         .onAppear {
             if !settings.isConfigured {
                 showSettings = true
+            }
+        }
+        // Cham vao thong bao "da xong" -> mo dung chat
+        .onReceive(watcher.$pendingChatId.compactMap { $0 }) { id in
+            watcher.pendingChatId = nil
+            Task {
+                await store.refresh(settings: settings)
+                path = NavigationPath()
+                path.append(ChatRoute.chat(id))
             }
         }
         // Tham so khoi dong "-openChat <id>": mo thang 1 chat (chay thu tren may ao)

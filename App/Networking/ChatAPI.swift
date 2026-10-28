@@ -26,6 +26,9 @@ public struct ChatMeta: Codable, Identifiable, Equatable {
     public var updatedAt: String?
     public var seq: Int?
     public var preview: String?
+    /// So luot da xong + so file ket qua luot cuoi (BackgroundWatcher bao "da xong")
+    public var turnsDone: Int? = nil
+    public var lastFiles: Int? = nil
 
     public var isBusy: Bool { status != "idle" }
     public var toolName: String { tool == "agy" ? "agy" : "Claude" }
