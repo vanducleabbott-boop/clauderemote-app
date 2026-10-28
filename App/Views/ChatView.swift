@@ -19,6 +19,8 @@ struct ChatView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var draft = ""
+    /// Doi de tao lai o nhap khi gui: bo chu go do (marked text) cua bo go tieng Viet (giong Zalo luu tru v6.6)
+    @State private var inputId = 0
     @State private var attachments: [PickedFile] = []
     @State private var sending = false
     @State private var progress: String?
@@ -291,6 +293,7 @@ struct ChatView: View {
                 TextField("Nhắn cho \(meta.toolName)…", text: $draft, axis: .vertical)
                     .lineLimit(1...8)
                     .focused($inputFocused)
+                    .id(inputId)
                     .padding(.horizontal, 4)
                     .padding(.top, 4)
 
@@ -406,6 +409,9 @@ struct ChatView: View {
         errorText = nil
         draft = ""
         attachments = []
+        // Xoa chu trong o chua du: bo go van giu chu dang go do va ghi lai -> tao o nhap moi, focus lai
+        inputId += 1
+        DispatchQueue.main.async { inputFocused = true }
         // Bo go tieng Viet (Telex/VNI) dang giu chu dang go do (marked text) se ghi lai chu vao o
         // sau khi xoa -> xoa them lan nua khi bo go da chot, neu o chi con chu cua tin vua gui
         for delay in [0.05, 0.25, 0.6] {
