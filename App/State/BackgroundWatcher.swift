@@ -36,7 +36,7 @@ final class BackgroundWatcher: NSObject, ObservableObject {
     private var makeAPI: (() -> ServerAPI?)?
     private var pollTask: Task<Void, Never>?
     private var seen: [String: (status: String, done: Int)] = [:]
-    /// iOS 17+: phien chay nen chinh thuc - dung khi chua co quyen "Luon luon" (chi "Khi dung app")
+    /// iOS 17+: phien chay nen chinh thuc (CLBackgroundActivitySession) - giu app chay khi o nen
     private var activitySession: AnyObject?
 
     private override init() {
@@ -45,16 +45,18 @@ final class BackgroundWatcher: NSObject, ObservableObject {
         locationStatus = locationManager.authorizationStatus
         super.init()
         locationManager.delegate = self
-        // Giong Zalo luu tru (ViTriGiuNen) + Clip: vi tri gan dung, khong bat GPS, khong hien mui ten.
-        // Chay tot tren iPhone that; may ao thi van cho app ngu sau ~30s.
-        locationManager.desiredAccuracy = kCLLocationAccuracyReduced
-        locationManager.distanceFilter = CLLocationDistanceMax
+        // v3.7: cach cua Zalo luu tru (kCLLocationAccuracyReduced + distanceFilter toi da) bi iOS coi la
+        // "tiet kiem pin", hau nhu khong gui vi tri -> tren iPhone that app van bi dung sau khi ra nen.
+        // ~3 km (song di dong/Wi-Fi, khong bat GPS) + nhan moi cap nhat de luong vi tri that su chay.
+        locationManager.desiredAccuracy = kCLLocationAccuracyThreeKilometers
+        locationManager.distanceFilter = kCLDistanceFilterNone
         locationManager.activityType = .other
         locationManager.pausesLocationUpdatesAutomatically = false
         UNUserNotificationCenter.current().delegate = self
         // Giong Zalo luu tru: moi lan ra nen thi bat lai theo doi vi tri
         NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
             BackgroundLog.add("Ra nền")
+            BackgroundLog.markEnteredBackground()
             Task { @MainActor in
                 let w = BackgroundWatcher.shared
                 if w.enabled { w.startLocation() }
@@ -62,6 +64,7 @@ final class BackgroundWatcher: NSObject, ObservableObject {
         }
         NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { _ in
             BackgroundLog.add("Vào lại app")
+            BackgroundLog.clearBackgroundMark()
         }
         NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { _ in
             BackgroundLog.add("iOS báo thiếu bộ nhớ")
@@ -76,6 +79,7 @@ final class BackgroundWatcher: NSObject, ObservableObject {
     /// Goi 1 lan luc mo app (ke ca khi iOS mo lai app o nen vi doi vi tri)
     func configure(makeAPI: @escaping () -> ServerAPI?) {
         self.makeAPI = makeAPI
+        BackgroundLog.reportPreviousRun()
         if enabled { start() }
     }
 
@@ -97,6 +101,7 @@ final class BackgroundWatcher: NSObject, ObservableObject {
         guard pollTask == nil else { return }
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
+                BackgroundLog.heartbeat()
                 await self?.poll()
                 try? await Task.sleep(nanoseconds: Self.interval)
             }
@@ -111,6 +116,7 @@ final class BackgroundWatcher: NSObject, ObservableObject {
         if #available(iOS 17.0, *) { (activitySession as? CLBackgroundActivitySession)?.invalidate() }
         activitySession = nil
         locationManager.stopUpdatingLocation()
+        locationManager.stopMonitoringSignificantLocationChanges()
         locationManager.allowsBackgroundLocationUpdates = false
     }
 
@@ -123,9 +129,12 @@ final class BackgroundWatcher: NSObject, ObservableObject {
         // an di thi iOS dung cap nhat vi tri o nen -> app bi treo sau ~30s
         locationManager.showsBackgroundLocationIndicator = !always
         locationManager.startUpdatingLocation()
-        if !always, #available(iOS 17.0, *), activitySession == nil {
+        // iOS 17+: cach giu nen chinh thuc cua Apple (quyen "Luon luon" thi khong hien vien xanh)
+        if #available(iOS 17.0, *), activitySession == nil {
             activitySession = CLBackgroundActivitySession()
         }
+        // App bi iOS tat han -> iOS mo lai app o nen khi vi tri doi dang ke (~500 m)
+        if always { locationManager.startMonitoringSignificantLocationChanges() }
     }
 
     func openSettings() {
@@ -182,9 +191,13 @@ extension BackgroundWatcher: CLLocationManagerDelegate {
         }
     }
 
-    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {}
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        BackgroundLog.add("Nhận vị trí", throttle: 120)
+    }
 
-    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        BackgroundLog.add("Lỗi vị trí: \(error.localizedDescription)", throttle: 120)
+    }
 }
 
 extension BackgroundWatcher: UNUserNotificationCenterDelegate {
@@ -273,4 +286,37 @@ enum BackgroundLog {
     }
 
     static var lines: [String] { (UserDefaults.standard.stringArray(forKey: key) ?? []).reversed() }
+
+    // "Con song" moi vong hoi server (~4s): mo lai app thi biet lan truoc song o nen duoc bao lau
+    private static let enteredKey = "bgEnteredAt"
+    private static let aliveKey = "bgAliveAt"
+
+    static func markEnteredBackground() {
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: enteredKey)
+        heartbeat()
+    }
+
+    static func clearBackgroundMark() {
+        report(prefix: "Lần ở nền vừa rồi")
+        UserDefaults.standard.removeObject(forKey: enteredKey)
+    }
+
+    static func heartbeat() {
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: aliveKey)
+    }
+
+    /// Goi luc mo app: lan truoc app chet khi dang o nen -> ghi song duoc bao lau
+    static func reportPreviousRun() {
+        report(prefix: "Lần trước app dừng")
+        UserDefaults.standard.removeObject(forKey: enteredKey)
+    }
+
+    private static func report(prefix: String) {
+        let d = UserDefaults.standard
+        guard let entered = d.object(forKey: enteredKey) as? Double, let alive = d.object(forKey: aliveKey) as? Double else { return }
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss"
+        let secs = Int(max(0, alive - entered))
+        add("\(prefix): ra nền \(f.string(from: Date(timeIntervalSince1970: entered))), còn chạy tới \(f.string(from: Date(timeIntervalSince1970: alive))) (\(secs) giây)")
+    }
 }
