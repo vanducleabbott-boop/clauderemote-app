@@ -64,8 +64,12 @@ struct SettingsView: View {
                         statusRow(ok: watcher.notifyAllowed,
                                   text: watcher.notifyAllowed ? "Đã cho phép thông báo" : "Chưa cho phép thông báo")
                         Toggle("Ẩn mũi tên định vị", isOn: $watcher.hideArrow)
+                        if watcher.hideArrow && watcher.preciseLocation {
+                            statusRow(ok: false, text: "\"Vị trí chính xác\" đang bật nên iOS luôn hiện mũi tên — vào Cài đặt iPhone › Claude Remote › Vị trí, tắt \"Vị trí chính xác\"")
+                            Button("Mở Cài đặt iPhone") { watcher.openSettings() }
+                        }
                         NavigationLink("Nhật ký chạy ngầm") { BackgroundLogView() }
-                        if !watcher.keepsAlive || !watcher.notifyAllowed {
+                        if (!watcher.keepsAlive || !watcher.notifyAllowed) && !(watcher.hideArrow && watcher.preciseLocation) {
                             Button("Mở Cài đặt iPhone") { watcher.openSettings() }
                         }
                     }

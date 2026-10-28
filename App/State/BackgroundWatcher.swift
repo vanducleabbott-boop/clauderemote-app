@@ -33,6 +33,8 @@ final class BackgroundWatcher: NSObject, ObservableObject {
         }
     }
     @Published private(set) var locationStatus: CLAuthorizationStatus
+    /// "Vi tri chinh xac" dang bat trong Cai dat iPhone -> iOS luon hien mui ten, app khong tu tat duoc
+    @Published private(set) var preciseLocation = false
     @Published private(set) var notifyAllowed = false
     /// Cham vao thong bao -> RootView mo chat nay
     @Published var pendingChatId: String?
@@ -53,6 +55,7 @@ final class BackgroundWatcher: NSObject, ObservableObject {
         hideArrow = UserDefaults.standard.object(forKey: Self.hideArrowKey) as? Bool ?? true
         locationStatus = locationManager.authorizationStatus
         super.init()
+        preciseLocation = locationManager.accuracyAuthorization == .fullAccuracy
         locationManager.delegate = self
         applyAccuracy()
         locationManager.activityType = .other
@@ -125,11 +128,12 @@ final class BackgroundWatcher: NSObject, ObservableObject {
         locationManager.allowsBackgroundLocationUpdates = false
     }
 
-    /// An mui ten: vi tri gan dung (kCLLocationAccuracyReduced, giong Zalo luu tru) - iOS khong hien mui ten.
-    /// Giu nen van nho CLBackgroundActivitySession (v3.7 chay lien tuc ca buoi). Khong an: ~3 km nhu v3.7.
+    /// An mui ten: dung y cau hinh Zalo luu tru v4.0 (vi tri gan dung + distanceFilter toi da, iOS gan nhu
+    /// khong gui vi tri nen khong hien mui ten). v3.8 de distanceFilter None -> iOS gui vi tri lien tuc, mui ten
+    /// van hien. Giu nen van nho CLBackgroundActivitySession. Khong an: ~3 km + moi cap nhat nhu v3.7.
     private func applyAccuracy() {
         locationManager.desiredAccuracy = hideArrow ? kCLLocationAccuracyReduced : kCLLocationAccuracyThreeKilometers
-        locationManager.distanceFilter = kCLDistanceFilterNone
+        locationManager.distanceFilter = hideArrow ? CLLocationDistanceMax : kCLDistanceFilterNone
     }
 
     fileprivate func startLocation() {
@@ -201,6 +205,7 @@ extension BackgroundWatcher: CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor in
             locationStatus = manager.authorizationStatus
+            preciseLocation = manager.accuracyAuthorization == .fullAccuracy
             if enabled { startLocation() }
         }
     }
