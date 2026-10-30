@@ -147,6 +147,26 @@ public struct ClaudeHistoryItem: Codable, Identifiable, Equatable {
     public var id: String { sessionId }
 }
 
+/// Thu muc tren PC (server tra khi mo link thu muc, vd agy luu ket qua vao Google Drive tren PC)
+public struct RemoteFolder: Codable, Equatable, Identifiable {
+    public struct Entry: Codable, Equatable, Identifiable {
+        public let name: String
+        public let path: String
+        public let dir: Bool
+        public let size: Int64?
+        public var id: String { path }
+    }
+    public let path: String
+    public let name: String
+    public let entries: [Entry]
+    public var id: String { path }
+}
+
+/// downloadFile gap thu muc thay vi file -> nem loi nay kem danh sach de giao dien hien
+public struct RemoteFolderOpened: Error {
+    public let folder: RemoteFolder
+}
+
 public struct CreatedTurn: Codable {
     public let turn: Int
     public let folder: String?
@@ -326,6 +346,11 @@ extension ServerAPI {
             throw APIError.httpError(statusCode: 403, message: "Không được mở file ngoài thư mục dự án")
         }
         _ = try Self.check(response, data: nil)
+        if let http = response as? HTTPURLResponse, http.value(forHTTPHeaderField: "X-CR-Folder") == "1" {
+            let data = try Data(contentsOf: tmp)
+            try? FileManager.default.removeItem(at: tmp)
+            throw RemoteFolderOpened(folder: try JSONDecoder().decode(RemoteFolder.self, from: data))
+        }
 
         try FileManager.default.createDirectory(at: local.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? FileManager.default.removeItem(at: local)

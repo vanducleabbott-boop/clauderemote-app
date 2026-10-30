@@ -28,6 +28,8 @@ struct ChatView: View {
     @State private var atBottom = true
     @State private var busySince: Date?
     @State private var previewURL: URL?
+    /// Link thu muc tren PC -> danh sach file ben trong
+    @State private var remoteFolder: RemoteFolder?
     @State private var downloading = false
     @State private var showPhotos = false
     @State private var photoItems: [PhotosPickerItem] = []
@@ -105,6 +107,9 @@ struct ChatView: View {
             }
         }
         .quickLookPreview($previewURL)
+        .sheet(item: $remoteFolder) { folder in
+            RemoteFolderView(folder: folder, api: api, chatId: meta.id)
+        }
         .overlay {
             if downloading {
                 ProgressView("Đang tải file…")
@@ -518,6 +523,8 @@ struct ChatView: View {
         Task {
             do {
                 previewURL = try await api.downloadFile(chatId: chatId, path: path, size: size)
+            } catch let opened as RemoteFolderOpened {
+                remoteFolder = opened.folder
             } catch {
                 errorText = error.localizedDescription
             }
